@@ -1,10 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./EyzflowPlayer.css";
 import { useShaka } from "../lib/use-shaka";
 import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { PlayerOverlay } from "./PlayerOverlay";
+
+function mergeConfig(
+  base: PlayerConfig,
+  patch?: Partial<PlayerConfig>,
+): PlayerConfig {
+  return {
+    ...base,
+    ...patch,
+    theme: { ...base.theme, ...patch?.theme },
+    features: { ...base.features, ...patch?.features },
+    cast: patch?.cast ?? base.cast,
+    ads: patch?.ads ?? base.ads,
+    drm: patch?.drm
+      ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
+      : base.drm,
+  };
+}
 
 export type EyzflowPlayerProps = {
   streamId: string;
@@ -37,39 +54,43 @@ export function EyzflowPlayer({
   onReady,
 }: EyzflowPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [config, setConfig] = useState<PlayerConfig>(DEFAULT_CONFIG);
+  const [remoteConfig, setRemoteConfig] = useState<PlayerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(!!configId);
 
-  // Load remote config
-  useEffect(() => {
-    const merge = (base: PlayerConfig, patch?: Partial<PlayerConfig>): PlayerConfig => ({
-      ...base,
-      ...patch,
-      theme: { ...base.theme, ...patch?.theme },
-      features: { ...base.features, ...patch?.features },
-      cast: patch?.cast ?? base.cast,
-      ads: patch?.ads ?? base.ads,
-      drm: patch?.drm
-        ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
-        : base.drm,
-    });
+  // Derived during render so DRM parameters are available on the first load.
+  const config = useMemo(
+    () => mergeConfig(remoteConfig ?? DEFAULT_CONFIG, configProp),
+    [remoteConfig, configProp],
+  );
 
-    if (!configId) {
-      setConfig(merge(DEFAULT_CONFIG, configProp));
-      return;
-    }
+  useEffect(() => {
+    if (!configId) return;
+    let cancelled = false;
     setConfigLoading(true);
     fetchPlayerConfig(configId)
-      .then((remote) => setConfig(merge(remote, configProp)))
-      .catch(() => setConfig(merge(DEFAULT_CONFIG, configProp)))
-      .finally(() => setConfigLoading(false));
-  }, [configId, configProp]);
+      .then((remote) => { if (!cancelled) setRemoteConfig(remote); })
+      .catch(() => { if (!cancelled) setRemoteConfig(null); })
+      .finally(() => { if (!cancelled) setConfigLoading(false); });
+    return () => { cancelled = true; };
+  }, [configId]);
 
   const resolved = {
     isProtected: isProtectedProp ?? config.isProtected,
     autoPlay: autoPlayProp ?? config.features.autoPlay,
     controls: controlsProp ?? config.features.controls,
   };
+
+  // Value-keyed so an inline `config` prop doesn't tear down playback each render.
+  const drmParametersKey = config.drm?.parameters
+    ? JSON.stringify(config.drm.parameters)
+    : "";
+  const drmParameters = useMemo(
+    () =>
+      drmParametersKey
+        ? (JSON.parse(drmParametersKey) as Record<string, unknown>)
+        : undefined,
+    [drmParametersKey],
+  );
 
   // Auto-hide controls
   const [hiding, setHiding] = useState(false);
@@ -92,7 +113,7 @@ export function EyzflowPlayer({
     streamId,
     isProtected: resolved.isProtected,
     drmAuthorizationKey,
-    drmParameters: config.drm?.parameters,
+    drmParameters,
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,

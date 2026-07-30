@@ -61,14 +61,19 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [textTracks, setTextTracks] = useState<ShakaTextTrack[]>([]);
   const [captionsVisible, setCaptionsVisible] = useState(false);
 
-  const fail = useCallback(
-    (msg: string) => {
-      setState("error");
-      setErrorMsg(msg);
-      onError?.(msg);
-    },
-    [onError],
-  );
+  // Held in refs so callers can pass inline handlers without re-running setup.
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  });
+
+  const fail = useCallback((msg: string) => {
+    setState("error");
+    setErrorMsg(msg);
+    onErrorRef.current?.(msg);
+  }, []);
 
   const refreshTracks = useCallback(() => {
     const p = playerRef.current;
@@ -120,6 +125,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         if (!cancelled) fail(e instanceof Error ? e.message : "Could not load player.");
         return;
       }
+      if (cancelled) return;
 
       shaka.polyfill.installAll();
 
@@ -129,8 +135,12 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       }
 
       const player = new shaka.Player();
-      playerRef.current = player;
       await player.attach(video);
+      if (cancelled) {
+        void player.destroy();
+        return;
+      }
+      playerRef.current = player;
 
       player.addEventListener("error", (event: Event) => {
         if (cancelled) return;
@@ -154,7 +164,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         setState("ready");
         setErrorMsg(null);
         refreshTracks();
-        onReady?.();
+        onReadyRef.current?.();
         if (autoPlay) {
           const kick = () => void video.play().catch(() => {});
           kick();
@@ -184,7 +194,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, fail, refreshTracks, onReady]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, fail, refreshTracks]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
