@@ -1,7 +1,7 @@
 import type { ShakaGlobal, ShakaPlayerApi } from "./shaka-types";
 
-const STREAM_CDN = (import.meta.env.VITE_STREAM_CDN_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://stream.eyzflow.com";
-const DRM_API = (import.meta.env.VITE_DRM_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
+const STREAM_CDN = (import.meta.env?.VITE_STREAM_CDN_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://stream.eyzflow.com";
+const DRM_API = (import.meta.env?.VITE_DRM_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
 
 export function buildAccessToken(authorizationKey: string): string {
   const payload = {

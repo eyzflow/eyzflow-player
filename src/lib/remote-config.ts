@@ -1,6 +1,6 @@
 import type { PlayerConfig } from "./config-types";
 
-const CONFIG_API = (import.meta.env.VITE_CONFIG_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
+const CONFIG_API = (import.meta.env?.VITE_CONFIG_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
 const cache = new Map<string, PlayerConfig>();
 
 export async function fetchPlayerConfig(configId: string): Promise<PlayerConfig> {
