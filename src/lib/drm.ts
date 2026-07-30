@@ -3,10 +3,13 @@ import type { ShakaGlobal, ShakaPlayerApi } from "./shaka-types";
 const STREAM_CDN = (import.meta.env?.VITE_STREAM_CDN_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://stream.eyzflow.com";
 const DRM_API = (import.meta.env?.VITE_DRM_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
 
-export function buildAccessToken(authorizationKey: string): string {
+export function buildAccessToken(
+  authorizationKey: string,
+  parameters: Record<string, unknown> = {},
+): string {
   const payload = {
     headers: { authorization: authorizationKey },
-    parameters: {} as Record<string, unknown>,
+    parameters,
   };
   return btoa(JSON.stringify(payload));
 }
@@ -16,6 +19,7 @@ export function configureDrm(
   shaka: ShakaGlobal,
   streamId: string,
   authorizationKey: string,
+  parameters?: Record<string, unknown>,
 ): void {
   const id = encodeURIComponent(streamId);
   player.configure({
@@ -33,7 +37,7 @@ export function configureDrm(
     },
   });
 
-  const accessToken = buildAccessToken(authorizationKey);
+  const accessToken = buildAccessToken(authorizationKey, parameters ?? {});
   const LICENSE = shaka.net.NetworkingEngine.RequestType.LICENSE;
   player.getNetworkingEngine().registerRequestFilter((type, request) => {
     if (type === LICENSE) {

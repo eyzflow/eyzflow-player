@@ -30,6 +30,10 @@ export type PlayerAdsConfig = {
   adTagUrl: string;
 };
 
+export type PlayerDrmConfig = {
+  parameters?: Record<string, unknown>;
+};
+
 export type PlayerConfig = {
   id: string;
   name: string;
@@ -38,6 +42,7 @@ export type PlayerConfig = {
   features: PlayerFeatures;
   cast?: PlayerCastConfig;
   ads?: PlayerAdsConfig;
+  drm?: PlayerDrmConfig;
 };
 
 export const DEFAULT_THEME: PlayerTheme = {

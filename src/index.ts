@@ -6,4 +6,5 @@ export type {
   PlayerFeatures,
   PlayerCastConfig,
   PlayerAdsConfig,
+  PlayerDrmConfig,
 } from "./lib/config-types";

@@ -10,6 +10,7 @@ export type UseShakaOptions = {
   streamId: string;
   isProtected: boolean;
   drmAuthorizationKey?: string;
+  drmParameters?: Record<string, unknown>;
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
@@ -42,7 +43,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, autoPlay, muted: initMuted, loop, onReady, onError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, muted: initMuted, loop, onReady, onError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
@@ -144,7 +145,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
 
       if (isProtected && drmAuthorizationKey) {
-        configureDrm(player, shaka, streamId, drmAuthorizationKey);
+        configureDrm(player, shaka, streamId, drmAuthorizationKey, drmParameters);
       }
 
       try {
@@ -183,7 +184,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, autoPlay, fail, refreshTracks, onReady]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, fail, refreshTracks, onReady]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;

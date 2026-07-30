@@ -49,6 +49,9 @@ export function EyzflowPlayer({
       features: { ...base.features, ...patch?.features },
       cast: patch?.cast ?? base.cast,
       ads: patch?.ads ?? base.ads,
+      drm: patch?.drm
+        ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
+        : base.drm,
     });
 
     if (!configId) {
@@ -89,6 +92,7 @@ export function EyzflowPlayer({
     streamId,
     isProtected: resolved.isProtected,
     drmAuthorizationKey,
+    drmParameters: config.drm?.parameters,
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,
