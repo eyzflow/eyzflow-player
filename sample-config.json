@@ -1,0 +1,33 @@
+{
+  "id": "cfg_eyzflow_default",
+  "name": "EyzFlow Default",
+  "isProtected": true,
+  "theme": {
+    "accentColor": "#615fff",
+    "backgroundColor": "#0a0a0a",
+    "controlsBarColor": "rgba(10,10,10,0.88)",
+    "textColor": "#fafafa",
+    "borderRadius": "10px"
+  },
+  "features": {
+    "controls": true,
+    "autoPlay": false,
+    "muted": false,
+    "loop": false,
+    "chromecast": true,
+    "airplay": true,
+    "qualitySelector": true,
+    "captions": true,
+    "pip": true,
+    "ads": false,
+    "autoHideControls": true
+  },
+  "cast": {
+    "receiverAppId": "",
+    "androidReceiverCompatible": false,
+    "autoJoinPolicy": "tab_and_origin_scoped"
+  },
+  "ads": {
+    "adTagUrl": ""
+  }
+}
