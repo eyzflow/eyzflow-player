@@ -31,6 +31,7 @@ export type UseShakaReturn = {
   tracks: ShakaTrack[];
   activeTrack: ShakaTrack | null;
   textTracks: ShakaTextTrack[];
+  activeTextTrack: ShakaTextTrack | null;
   captionsVisible: boolean;
   play: () => void;
   pause: () => void;
@@ -39,6 +40,7 @@ export type UseShakaReturn = {
   setMuted: (m: boolean) => void;
   selectTrack: (track: ShakaTrack) => void;
   selectTextTrack: (track: ShakaTextTrack) => void;
+  disableCaptions: () => void;
   toggleCaptions: () => void;
 };
 
@@ -59,6 +61,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [tracks, setTracks] = useState<ShakaTrack[]>([]);
   const [activeTrack, setActiveTrack] = useState<ShakaTrack | null>(null);
   const [textTracks, setTextTracks] = useState<ShakaTextTrack[]>([]);
+  const [activeTextTrack, setActiveTextTrack] = useState<ShakaTextTrack | null>(null);
   const [captionsVisible, setCaptionsVisible] = useState(false);
 
   // Held in refs so callers can pass inline handlers without re-running setup.
@@ -81,7 +84,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const vt = p.getVariantTracks();
     setTracks(vt);
     setActiveTrack(vt.find((t) => t.active) ?? null);
-    setTextTracks(p.getTextTracks());
+    const tt = p.getTextTracks();
+    setTextTracks(tt);
+    setActiveTextTrack(tt.find((t) => t.active) ?? null);
+    setCaptionsVisible(p.isTextTrackVisible());
   }, []);
 
   useEffect(() => {
@@ -153,6 +159,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
       player.addEventListener("trackschanged", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
+      player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
+      player.addEventListener("texttrackvisibility", () => { if (!cancelled) refreshTracks(); });
 
       if (isProtected && drmAuthorizationKey) {
         configureDrm(player, shaka, streamId, drmAuthorizationKey, drmParameters);
@@ -224,6 +232,13 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     p.selectTextTrack(track);
     p.setTextTrackVisibility(true);
     setCaptionsVisible(true);
+    setActiveTextTrack(track);
+  }, []);
+  const disableCaptions = useCallback(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    p.setTextTrackVisibility(false);
+    setCaptionsVisible(false);
   }, []);
   const toggleCaptions = useCallback(() => {
     const p = playerRef.current;
@@ -246,6 +261,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     tracks,
     activeTrack,
     textTracks,
+    activeTextTrack,
     captionsVisible,
     play,
     pause,
@@ -254,6 +270,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setMuted,
     selectTrack,
     selectTextTrack,
+    disableCaptions,
     toggleCaptions,
   };
 }

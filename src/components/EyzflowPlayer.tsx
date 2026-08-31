@@ -172,6 +172,7 @@ export function EyzflowPlayer({
           tracks={shaka.tracks}
           activeTrack={shaka.activeTrack}
           textTracks={shaka.textTracks}
+          activeTextTrack={shaka.activeTextTrack}
           captionsVisible={shaka.captionsVisible}
           features={config.features}
           castConfig={config.cast}
@@ -183,7 +184,8 @@ export function EyzflowPlayer({
           onVolume={shaka.setVolume}
           onMute={shaka.setMuted}
           onSelectTrack={shaka.selectTrack}
-          onToggleCaptions={shaka.toggleCaptions}
+          onSelectTextTrack={shaka.selectTextTrack}
+          onCaptionsOff={shaka.disableCaptions}
         />
       )}
     </div>
