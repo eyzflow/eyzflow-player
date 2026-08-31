@@ -87,7 +87,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const tt = p.getTextTracks();
     setTextTracks(tt);
     setActiveTextTrack(tt.find((t) => t.active) ?? null);
-    setCaptionsVisible(p.isTextTrackVisible());
+    setCaptionsVisible(p.isTextVisible());
   }, []);
 
   useEffect(() => {
@@ -160,7 +160,6 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("trackschanged", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
-      player.addEventListener("texttrackvisibility", () => { if (!cancelled) refreshTracks(); });
 
       if (isProtected && drmAuthorizationKey) {
         configureDrm(player, shaka, streamId, drmAuthorizationKey, drmParameters);
@@ -230,21 +229,21 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const p = playerRef.current;
     if (!p) return;
     p.selectTextTrack(track);
-    p.setTextTrackVisibility(true);
+    p.setTextVisibility(true);
     setCaptionsVisible(true);
     setActiveTextTrack(track);
   }, []);
   const disableCaptions = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    p.setTextTrackVisibility(false);
+    p.setTextVisibility(false);
     setCaptionsVisible(false);
   }, []);
   const toggleCaptions = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
     const next = !captionsVisible;
-    p.setTextTrackVisibility(next);
+    p.setTextVisibility(next);
     setCaptionsVisible(next);
   }, [captionsVisible]);
 
