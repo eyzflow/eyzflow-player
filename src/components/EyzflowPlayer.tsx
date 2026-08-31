@@ -54,6 +54,7 @@ export function EyzflowPlayer({
   onReady,
 }: EyzflowPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const [remoteConfig, setRemoteConfig] = useState<PlayerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(!!configId);
 
@@ -92,23 +93,6 @@ export function EyzflowPlayer({
     [drmParametersKey],
   );
 
-  // Auto-hide controls
-  const [hiding, setHiding] = useState(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetHideTimer = useCallback(() => {
-    setHiding(false);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (config.features.autoHideControls) {
-      hideTimer.current = setTimeout(() => setHiding(true), 3000);
-    }
-  }, [config.features.autoHideControls]);
-
-  useEffect(() => {
-    resetHideTimer();
-    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
-  }, [resetHideTimer]);
-
   const shaka = useShaka({
     streamId,
     isProtected: resolved.isProtected,
@@ -117,9 +101,27 @@ export function EyzflowPlayer({
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,
+    textContainerRef: textLayerRef,
     onReady,
     onError,
   });
+
+  // Auto-hide controls after 3s of pointer inactivity, but only while playing.
+  const [hiding, setHiding] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetHideTimer = useCallback(() => {
+    setHiding(false);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (config.features.autoHideControls && shaka.playing) {
+      hideTimer.current = setTimeout(() => setHiding(true), 3000);
+    }
+  }, [config.features.autoHideControls, shaka.playing]);
+
+  useEffect(() => {
+    resetHideTimer();
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, [resetHideTimer]);
 
   // Apply theme as CSS custom properties
   const { theme } = config;
@@ -160,6 +162,7 @@ export function EyzflowPlayer({
         playsInline
         muted={config.features.muted}
       />
+      <div className="eyz-text-layer" ref={textLayerRef} />
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
       {resolved.controls && shaka.state !== "error" && (
         <ControlBar

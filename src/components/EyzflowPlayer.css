@@ -99,10 +99,48 @@
   pointer-events: none;
 }
 
-.eyz-player:hover .eyz-controls,
-.eyz-player:focus-within .eyz-controls {
+.eyz-player--hide-controls {
+  cursor: none;
+}
+
+/* Keyboard focus keeps controls visible; plain hover must not, since a
+   fullscreen player is always hovered and would never auto-hide. */
+.eyz-player:has(:focus-visible) .eyz-controls {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* ── Subtitles ──
+   Shaka's UITextDisplayer renders cues into .shaka-text-container inside
+   .eyz-text-layer. The layer sits below the controls (z-index) and its
+   bottom edge rises while the control bar is visible so cues never hide
+   behind it. Base rules mirror shaka-player's controls.css. */
+.eyz-text-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+  transition: bottom var(--eyz-transition);
+}
+
+.eyz-player:not(.eyz-player--hide-controls) .eyz-text-layer {
+  bottom: 72px;
+}
+
+.eyz-text-layer .shaka-text-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  width: 100%;
+  min-width: 48px;
+  font-size: clamp(16px, 4.4vmin, 44px);
+  line-height: 1.4;
+  color: #fff;
+}
+
+.eyz-text-layer .shaka-text-container span.shaka-text-wrapper {
+  display: inline;
+  background: none;
 }
 
 .eyz-controls-row {

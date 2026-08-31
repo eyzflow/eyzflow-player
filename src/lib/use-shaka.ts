@@ -14,6 +14,8 @@ export type UseShakaOptions = {
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
+  /** Element Shaka renders text cues into, so subtitles can be layered/styled. */
+  textContainerRef?: React.RefObject<HTMLElement | null>;
   onReady?: () => void;
   onError?: (msg: string) => void;
 };
@@ -45,7 +47,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, muted: initMuted, loop, onReady, onError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, muted: initMuted, loop, textContainerRef, onReady, onError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
@@ -151,6 +153,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       }
       playerRef.current = player;
 
+      if (textContainerRef?.current) {
+        player.setVideoContainer(textContainerRef.current);
+      }
+
       player.addEventListener("error", (event: Event) => {
         if (cancelled) return;
         const detail = (event as CustomEvent<{ message?: string; code?: number }>).detail;
@@ -204,7 +210,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, fail, refreshTracks]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, textContainerRef, fail, refreshTracks]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
