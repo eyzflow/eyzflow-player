@@ -54,7 +54,6 @@ export function EyzflowPlayer({
   onReady,
 }: EyzflowPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const [remoteConfig, setRemoteConfig] = useState<PlayerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(!!configId);
 
@@ -101,7 +100,6 @@ export function EyzflowPlayer({
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,
-    textContainerRef: textLayerRef,
     onReady,
     onError,
   });
@@ -155,6 +153,8 @@ export function EyzflowPlayer({
       ref={containerRef}
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
+      onFocus={resetHideTimer}
+      onKeyDown={resetHideTimer}
     >
       <video
         ref={shaka.videoRef}
@@ -162,7 +162,17 @@ export function EyzflowPlayer({
         playsInline
         muted={config.features.muted}
       />
-      <div className="eyz-text-layer" ref={textLayerRef} />
+      {shaka.activeCueLines.length > 0 && (
+        <div className="eyz-text-layer" aria-live="off">
+          <div className="eyz-cue">
+            {shaka.activeCueLines.map((line, i) => (
+              <span key={i} className="eyz-cue-line">
+                {line}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
       {resolved.controls && shaka.state !== "error" && (
         <ControlBar

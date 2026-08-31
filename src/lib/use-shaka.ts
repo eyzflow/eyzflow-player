@@ -14,8 +14,6 @@ export type UseShakaOptions = {
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
-  /** Element Shaka renders text cues into, so subtitles can be layered/styled. */
-  textContainerRef?: React.RefObject<HTMLElement | null>;
   onReady?: () => void;
   onError?: (msg: string) => void;
 };
@@ -35,6 +33,8 @@ export type UseShakaReturn = {
   textTracks: ShakaTextTrack[];
   activeTextTrack: ShakaTextTrack | null;
   captionsVisible: boolean;
+  /** Text lines of the currently active subtitle cues, for custom rendering. */
+  activeCueLines: string[];
   play: () => void;
   pause: () => void;
   seek: (seconds: number) => void;
@@ -47,7 +47,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, muted: initMuted, loop, textContainerRef, onReady, onError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, muted: initMuted, loop, onReady, onError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
@@ -65,6 +65,57 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [textTracks, setTextTracks] = useState<ShakaTextTrack[]>([]);
   const [activeTextTrack, setActiveTextTrack] = useState<ShakaTextTrack | null>(null);
   const [captionsVisible, setCaptionsVisible] = useState(false);
+  const [activeCueLines, setActiveCueLines] = useState<string[]>([]);
+
+  // Cues are rendered by the player UI (not the browser's native cue box),
+  // so keep the native tracks "hidden": cues stay parsed and cuechange keeps
+  // firing, but nothing paints over our layout. Shaka may flip a track back
+  // to "showing" when selection changes, so this runs from several places.
+  const cueTrackRef = useRef<TextTrack | null>(null);
+
+  const readActiveCues = useCallback(() => {
+    const track = cueTrackRef.current;
+    if (!track || !track.activeCues) {
+      setActiveCueLines([]);
+      return;
+    }
+    const lines: string[] = [];
+    for (const cue of Array.from(track.activeCues)) {
+      // Strip WebVTT markup (<i>, <c.class>, …) — we render plain text.
+      const text = (cue as VTTCue).text?.replace(/<[^>]+>/g, "");
+      if (text) lines.push(...text.split("\n"));
+    }
+    setActiveCueLines(lines);
+  }, []);
+
+  const unbindCueTrack = useCallback(() => {
+    const prev = cueTrackRef.current;
+    if (prev) prev.removeEventListener("cuechange", readActiveCues);
+    cueTrackRef.current = null;
+    setActiveCueLines([]);
+  }, [readActiveCues]);
+
+  const bindCueTrack = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const tracks = Array.from(video.textTracks);
+    const track =
+      tracks.find((t) => t.mode === "showing") ??
+      tracks.find((t) => t.mode === "hidden") ??
+      null;
+    for (const t of tracks) {
+      if (t.mode === "showing") t.mode = "hidden";
+    }
+    if (track === cueTrackRef.current) {
+      readActiveCues();
+      return;
+    }
+    unbindCueTrack();
+    if (!track) return;
+    cueTrackRef.current = track;
+    track.addEventListener("cuechange", readActiveCues);
+    readActiveCues();
+  }, [readActiveCues, unbindCueTrack]);
 
   // Held in refs so callers can pass inline handlers without re-running setup.
   const onReadyRef = useRef(onReady);
@@ -107,7 +158,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       if (video.buffered.length > 0) {
         setBuffered(video.buffered.end(video.buffered.length - 1));
       }
+      const cueTrack = cueTrackRef.current;
+      if (cueTrack && cueTrack.mode === "showing") cueTrack.mode = "hidden";
     };
+    const onAddTrack = () => { if (!cancelled) bindCueTrack(); };
     const onDuration = () => {
       if (!cancelled && Number.isFinite(video.duration)) setDuration(video.duration);
     };
@@ -125,6 +179,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     video.addEventListener("volumechange", onVolumeChange);
+    video.textTracks.addEventListener("addtrack", onAddTrack);
 
     void (async () => {
       setState("loading");
@@ -152,10 +207,6 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         return;
       }
       playerRef.current = player;
-
-      if (textContainerRef?.current) {
-        player.setVideoContainer(textContainerRef.current);
-      }
 
       player.addEventListener("error", (event: Event) => {
         if (cancelled) return;
@@ -206,11 +257,13 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("volumechange", onVolumeChange);
+      video.textTracks.removeEventListener("addtrack", onAddTrack);
+      unbindCueTrack();
       const p = playerRef.current;
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, textContainerRef, fail, refreshTracks]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, fail, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
@@ -240,29 +293,28 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     p.selectTextTrack(track);
     setCaptionsVisible(true);
     setActiveTextTrack(track);
-  }, []);
+    // The native track backing the selection may only exist after Shaka
+    // processes the switch; bind on the next tick (addtrack covers the rest).
+    setTimeout(bindCueTrack, 0);
+  }, [bindCueTrack]);
   const disableCaptions = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
     p.selectTextTrack(null);
     setCaptionsVisible(false);
     setActiveTextTrack(null);
-  }, []);
+    unbindCueTrack();
+  }, [unbindCueTrack]);
   const toggleCaptions = useCallback(() => {
-    const p = playerRef.current;
-    if (!p) return;
     if (captionsVisible) {
-      p.selectTextTrack(null);
-      setCaptionsVisible(false);
-      setActiveTextTrack(null);
+      disableCaptions();
       return;
     }
+    const p = playerRef.current;
+    if (!p) return;
     const track = activeTextTrack ?? p.getTextTracks()[0];
-    if (!track) return;
-    p.selectTextTrack(track);
-    setCaptionsVisible(true);
-    setActiveTextTrack(track);
-  }, [captionsVisible, activeTextTrack]);
+    if (track) selectTextTrack(track);
+  }, [captionsVisible, activeTextTrack, selectTextTrack, disableCaptions]);
 
   return {
     videoRef,
@@ -279,6 +331,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     textTracks,
     activeTextTrack,
     captionsVisible,
+    activeCueLines,
     play,
     pause,
     seek,
