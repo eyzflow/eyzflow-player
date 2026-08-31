@@ -43,8 +43,6 @@ export type ShakaPlayerApi = {
   selectVariantTrack: (track: ShakaTrack, clearBuffer?: boolean) => void;
   /** Selecting a track shows it; passing null unloads/hides text. */
   selectTextTrack: (track: ShakaTextTrack | null) => void;
-  /** Makes Shaka render text cues into a DOM element (UITextDisplayer). */
-  setVideoContainer: (el: HTMLElement | null) => void;
 };
 
 export type ShakaPlayerConstructor = {
