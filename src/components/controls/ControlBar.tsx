@@ -5,7 +5,7 @@ import { SeekBar } from "./SeekBar";
 import { TimeDisplay } from "./TimeDisplay";
 import { VolumeControl } from "./VolumeControl";
 import { QualitySelector } from "./QualitySelector";
-import { CaptionsButton } from "./CaptionsButton";
+import { CaptionsSelector } from "./CaptionsSelector";
 import { CastButton } from "./CastButton";
 import { AirPlayButton } from "./AirPlayButton";
 import { PipButton } from "./PipButton";
@@ -21,6 +21,7 @@ type Props = {
   tracks: ShakaTrack[];
   activeTrack: ShakaTrack | null;
   textTracks: ShakaTextTrack[];
+  activeTextTrack: ShakaTextTrack | null;
   captionsVisible: boolean;
   features: PlayerFeatures;
   castConfig?: PlayerCastConfig;
@@ -32,18 +33,19 @@ type Props = {
   onVolume: (v: number) => void;
   onMute: (m: boolean) => void;
   onSelectTrack: (t: ShakaTrack) => void;
-  onToggleCaptions: () => void;
+  onSelectTextTrack: (t: ShakaTextTrack) => void;
+  onCaptionsOff: () => void;
 };
 
 export function ControlBar({
   playing, currentTime, duration, buffered,
   volume, muted,
-  tracks, activeTrack, textTracks, captionsVisible,
+  tracks, activeTrack, textTracks, activeTextTrack, captionsVisible,
   features, castConfig,
   videoRef, containerRef,
   onPlay, onPause, onSeek,
   onVolume, onMute,
-  onSelectTrack, onToggleCaptions,
+  onSelectTrack, onSelectTextTrack, onCaptionsOff,
 }: Props) {
   return (
     <div className="eyz-controls">
@@ -58,8 +60,14 @@ export function ControlBar({
           {features.qualitySelector && (
             <QualitySelector tracks={tracks} activeTrack={activeTrack} onSelect={onSelectTrack} />
           )}
-          {features.captions && textTracks.length > 0 && (
-            <CaptionsButton visible={captionsVisible} onClick={onToggleCaptions} />
+          {features.captions && (
+            <CaptionsSelector
+              textTracks={textTracks}
+              activeTextTrack={activeTextTrack}
+              captionsVisible={captionsVisible}
+              onSelect={onSelectTextTrack}
+              onOff={onCaptionsOff}
+            />
           )}
           {features.airplay && <AirPlayButton videoRef={videoRef} />}
           {features.chromecast && <CastButton videoRef={videoRef} castConfig={castConfig} />}
