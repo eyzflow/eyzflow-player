@@ -41,9 +41,8 @@ export type ShakaPlayerApi = {
   getVariantTracks: () => ShakaTrack[];
   getTextTracks: () => ShakaTextTrack[];
   selectVariantTrack: (track: ShakaTrack, clearBuffer?: boolean) => void;
-  selectTextTrack: (track: ShakaTextTrack) => void;
-  setTextVisibility: (visible: boolean) => void;
-  isTextVisible: () => boolean;
+  /** Selecting a track shows it; passing null unloads/hides text. */
+  selectTextTrack: (track: ShakaTextTrack | null) => void;
 };
 
 export type ShakaPlayerConstructor = {

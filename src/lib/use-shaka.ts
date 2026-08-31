@@ -86,8 +86,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setActiveTrack(vt.find((t) => t.active) ?? null);
     const tt = p.getTextTracks();
     setTextTracks(tt);
-    setActiveTextTrack(tt.find((t) => t.active) ?? null);
-    setCaptionsVisible(p.isTextVisible());
+    // In Shaka 5 there is no separate visibility flag on Player: text is
+    // visible exactly when a track is selected (active).
+    const active = tt.find((t) => t.active) ?? null;
+    setActiveTextTrack(active);
+    setCaptionsVisible(active != null);
   }, []);
 
   useEffect(() => {
@@ -229,23 +232,31 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const p = playerRef.current;
     if (!p) return;
     p.selectTextTrack(track);
-    p.setTextVisibility(true);
     setCaptionsVisible(true);
     setActiveTextTrack(track);
   }, []);
   const disableCaptions = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    p.setTextVisibility(false);
+    p.selectTextTrack(null);
     setCaptionsVisible(false);
+    setActiveTextTrack(null);
   }, []);
   const toggleCaptions = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    const next = !captionsVisible;
-    p.setTextVisibility(next);
-    setCaptionsVisible(next);
-  }, [captionsVisible]);
+    if (captionsVisible) {
+      p.selectTextTrack(null);
+      setCaptionsVisible(false);
+      setActiveTextTrack(null);
+      return;
+    }
+    const track = activeTextTrack ?? p.getTextTracks()[0];
+    if (!track) return;
+    p.selectTextTrack(track);
+    setCaptionsVisible(true);
+    setActiveTextTrack(track);
+  }, [captionsVisible, activeTextTrack]);
 
   return {
     videoRef,
