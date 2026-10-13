@@ -34,6 +34,7 @@ export type ShakaPlayerApi = {
   configure: (config: unknown) => void;
   attach: (video: HTMLVideoElement) => Promise<void>;
   load: (uri: string) => Promise<void>;
+  unload: () => Promise<void>;
   destroy: () => Promise<void>;
   addEventListener: (event: string, fn: (e: Event) => void) => void;
   removeEventListener: (event: string, fn: (e: Event) => void) => void;

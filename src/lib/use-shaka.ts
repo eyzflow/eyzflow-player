@@ -2,6 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadShaka } from "./shaka-loader";
 import { configureDrm } from "./drm";
 import { streamManifestUrl } from "./manifest";
+import { getDeviceId } from "./device";
+import {
+  closePlaybackSession,
+  heartbeatPlaybackSession,
+  limitMessage,
+  openPlaybackSession,
+  PlaybackLimitException,
+  type PlaybackLimitCode,
+  type PlaybackLimitError,
+} from "./playback-session";
 import type { ShakaPlayerApi, ShakaTrack, ShakaTextTrack } from "./shaka-types";
 
 export type ShakaState = "idle" | "loading" | "ready" | "error";
@@ -14,14 +24,20 @@ export type UseShakaOptions = {
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
+  /** Shown in the viewer's device list, e.g. "Living room". Defaults to the browser's description. */
+  deviceName?: string;
   onReady?: () => void;
   onError?: (msg: string) => void;
+  /** A plan's stream or device limit was reached, or the viewer was signed out on this device. */
+  onLimitReached?: (limit: PlaybackLimitError) => void;
 };
 
 export type UseShakaReturn = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   state: ShakaState;
   errorMsg: string | null;
+  /** Set when playback was refused or stopped by a stream or device limit. */
+  limitError: PlaybackLimitError | null;
   playing: boolean;
   currentTime: number;
   duration: number;
@@ -47,13 +63,14 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, muted: initMuted, loop, onReady, onError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
 
   const [state, setState] = useState<ShakaState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [limitError, setLimitError] = useState<PlaybackLimitError | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -120,15 +137,25 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   // Held in refs so callers can pass inline handlers without re-running setup.
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
+  const onLimitReachedRef = useRef(onLimitReached);
   useEffect(() => {
     onReadyRef.current = onReady;
     onErrorRef.current = onError;
+    onLimitReachedRef.current = onLimitReached;
   });
 
   const fail = useCallback((msg: string) => {
     setState("error");
     setErrorMsg(msg);
     onErrorRef.current?.(msg);
+  }, []);
+
+  const failLimit = useCallback((limit: PlaybackLimitError) => {
+    setLimitError(limit);
+    onLimitReachedRef.current?.(limit);
+    setState("error");
+    setErrorMsg(limitMessage(limit.code));
+    onErrorRef.current?.(limitMessage(limit.code));
   }, []);
 
   const refreshTracks = useCallback(() => {
@@ -151,6 +178,18 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     if (!video) return;
 
     let cancelled = false;
+    setLimitError(null);
+
+    // The playback session that counts this stream against the plan's limits (storefront viewers only).
+    let session: { target: Parameters<typeof closePlaybackSession>[0]; id: string } | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    const endSession = () => {
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = null;
+      if (session) closePlaybackSession(session.target, session.id);
+      session = null;
+    };
+    window.addEventListener("pagehide", endSession);
 
     const onTimeUpdate = () => {
       if (cancelled) return;
@@ -211,6 +250,12 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("error", (event: Event) => {
         if (cancelled) return;
         const detail = (event as CustomEvent<{ message?: string; code?: number }>).detail;
+        const refused = limitCodeIn(detail);
+        if (refused) {
+          endSession();
+          failLimit({ code: refused, message: limitMessage(refused), details: {} });
+          return;
+        }
         const msg = detail?.code
           ? `Playback error ${detail.code}${detail.message ? `: ${detail.message}` : ""}`
           : (detail?.message ?? "Playback failed.");
@@ -222,7 +267,41 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
 
       if (isProtected && drmAuthorizationKey) {
-        configureDrm(player, shaka, streamId, drmAuthorizationKey, drmParameters);
+        const deviceId = getDeviceId();
+        const parameters: Record<string, unknown> = { ...drmParameters, device_id: deviceId };
+        const storefrontId = drmParameters?.storefront_id;
+        if (typeof storefrontId === "string" && storefrontId) {
+          const target = { storefrontId, authorization: drmAuthorizationKey, deviceId };
+          try {
+            const opened = await openPlaybackSession({ ...target, streamId, deviceName });
+            if (cancelled) {
+              if (opened.id) closePlaybackSession(target, opened.id);
+              return;
+            }
+            if (opened.id) {
+              const current = { target, id: opened.id };
+              session = current;
+              parameters.playback_session_id = opened.id;
+              heartbeat = setInterval(() => {
+                void heartbeatPlaybackSession(current.target, current.id).then((alive) => {
+                  if (alive || cancelled || session !== current) return;
+                  session = null;
+                  endSession();
+                  void player.unload();
+                  failLimit({ code: "PLAYBACK_SESSION_ENDED", message: limitMessage("PLAYBACK_SESSION_ENDED"), details: {} });
+                });
+              }, opened.heartbeatIntervalSeconds * 1000);
+            }
+          } catch (e) {
+            if (cancelled) return;
+            if (e instanceof PlaybackLimitException) {
+              failLimit(e.limit);
+              return;
+            }
+            // Any other failure leaves the limits to the licence request, which counts this stream itself.
+          }
+        }
+        configureDrm(player, shaka, streamId, drmAuthorizationKey, parameters);
       }
 
       try {
@@ -251,6 +330,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
     return () => {
       cancelled = true;
+      window.removeEventListener("pagehide", endSession);
+      endSession();
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("durationchange", onDuration);
       video.removeEventListener("loadedmetadata", onDuration);
@@ -263,7 +344,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, autoPlay, fail, refreshTracks, bindCueTrack, unbindCueTrack]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, fail, failLimit, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
@@ -320,6 +401,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     videoRef,
     state,
     errorMsg,
+    limitError,
     playing,
     currentTime,
     duration,
@@ -342,4 +424,18 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     disableCaptions,
     toggleCaptions,
   };
+}
+
+const LIMIT_CODE_PATTERN = /"code"\s*:\s*"(STREAM_LIMIT|DEVICE_LIMIT|DEVICE_REVOKED|SESSION_REVOKED|PLAYBACK_SESSION_ENDED)"/;
+
+/** A licence request refused by a stream or device limit: Shaka keeps the response text in the error's data. */
+function limitCodeIn(detail: unknown): PlaybackLimitCode | null {
+  let text: string;
+  try {
+    text = JSON.stringify(detail);
+  } catch {
+    return null;
+  }
+  const match = LIMIT_CODE_PATTERN.exec(text.replace(/\\"/g, '"'));
+  return match ? (match[1] as PlaybackLimitCode) : null;
 }
