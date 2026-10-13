@@ -8,3 +8,4 @@ export type {
   PlayerAdsConfig,
   PlayerDrmConfig,
 } from "./lib/config-types";
+export type { PlaybackLimitCode, PlaybackLimitError } from "./lib/playback-session";
