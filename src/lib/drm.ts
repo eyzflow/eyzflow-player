@@ -1,7 +1,5 @@
+import { API_ORIGIN, STREAM_CDN_ORIGIN } from "./api";
 import type { ShakaGlobal, ShakaPlayerApi } from "./shaka-types";
-
-const STREAM_CDN = (import.meta.env?.VITE_STREAM_CDN_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://stream.eyzflow.com";
-const DRM_API = (import.meta.env?.VITE_DRM_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
 
 export function buildAccessToken(
   authorizationKey: string,
@@ -14,34 +12,38 @@ export function buildAccessToken(
   return btoa(JSON.stringify(payload));
 }
 
+/**
+ * Points Shaka at the eyzflow licence servers and adds the access token to every licence request. The parameters are
+ * read per request, so a renewed player token (parameters.player_token) is always the one sent.
+ */
 export function configureDrm(
   player: ShakaPlayerApi,
   shaka: ShakaGlobal,
   streamId: string,
   authorizationKey: string,
-  parameters?: Record<string, unknown>,
+  parameters: Record<string, unknown> | (() => Record<string, unknown>) = {},
 ): void {
   const id = encodeURIComponent(streamId);
   player.configure({
     drm: {
       servers: {
-        "com.widevine.alpha": `${DRM_API}/v1/drm/${id}/widevine/acquire`,
-        "com.microsoft.playready": `${DRM_API}/v1/drm/${id}/playready/acquire`,
-        "com.apple.fps": `${DRM_API}/v1/drm/${id}/fairplay/acquire`,
+        "com.widevine.alpha": `${API_ORIGIN}/v1/drm/${id}/widevine/acquire`,
+        "com.microsoft.playready": `${API_ORIGIN}/v1/drm/${id}/playready/acquire`,
+        "com.apple.fps": `${API_ORIGIN}/v1/drm/${id}/fairplay/acquire`,
       },
       advanced: {
         "com.apple.fps": {
-          serverCertificateUri: `${STREAM_CDN}/fps.cer`,
+          serverCertificateUri: `${STREAM_CDN_ORIGIN}/fps.cer`,
         },
       },
     },
   });
 
-  const accessToken = buildAccessToken(authorizationKey, parameters ?? {});
+  const read = typeof parameters === "function" ? parameters : () => parameters;
   const LICENSE = shaka.net.NetworkingEngine.RequestType.LICENSE;
   player.getNetworkingEngine().registerRequestFilter((type, request) => {
     if (type === LICENSE) {
-      request.headers["access-token"] = accessToken;
+      request.headers["access-token"] = buildAccessToken(authorizationKey, read());
     }
   });
 }

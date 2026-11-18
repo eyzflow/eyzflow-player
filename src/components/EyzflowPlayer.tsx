@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { PlayerOverlay } from "./PlayerOverlay";
 import type { PlaybackLimitError } from "../lib/playback-session";
+import type { PlayerLicenseError } from "../lib/license";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -24,8 +25,22 @@ function mergeConfig(
   };
 }
 
+export type EyzflowPlayerAnalyticsOptions = {
+  /** Add CMCD data (with the analytics impression id) to manifest and segment requests, so CDN logs can be joined. */
+  cmcd?: boolean;
+};
+
 export type EyzflowPlayerProps = {
   streamId: string;
+  /**
+   * The organisation's player key (pk_…, from the dashboard: Player → Keys). The player checks it for this site before
+   * playing; it also turns on playback quality analytics when the key has them on.
+   */
+  playerKey?: string;
+  /** Playback quality analytics, with a player key. `false` turns them off for this player. Default on. */
+  analytics?: boolean | EyzflowPlayerAnalyticsOptions;
+  /** The player key check refused this site or key (the player shows an error instead of the video). */
+  onLicenseError?: (error: PlayerLicenseError) => void;
   /** Fetch remote config by ID from the eyzflow API */
   configId?: string;
   /** Inline config — merged over remote config (this wins) */
@@ -53,6 +68,9 @@ export type EyzflowPlayerProps = {
 
 export function EyzflowPlayer({
   streamId,
+  playerKey,
+  analytics: analyticsProp,
+  onLicenseError,
   configId,
   config: configProp,
   drmAuthorizationKey,
@@ -114,6 +132,11 @@ export function EyzflowPlayer({
     drmAuthorizationKey,
     drmParameters,
     deviceName,
+    playerKey,
+    configId,
+    analytics: analyticsProp !== false,
+    cmcd: typeof analyticsProp === "object" && analyticsProp.cmcd === true,
+    onLicenseError,
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,
