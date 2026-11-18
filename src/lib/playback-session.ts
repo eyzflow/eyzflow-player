@@ -1,4 +1,4 @@
-const API = (import.meta.env?.VITE_DRM_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "https://api.eyzflow.com";
+import { API_ORIGIN as API } from "./api";
 
 /** Refusals the backend gives when a plan's stream or device limit is reached, or the viewer was signed out. */
 export type PlaybackLimitCode =

@@ -44,7 +44,13 @@ export type ShakaPlayerApi = {
   selectVariantTrack: (track: ShakaTrack, clearBuffer?: boolean) => void;
   /** Selecting a track shows it; passing null unloads/hides text. */
   selectTextTrack: (track: ShakaTextTrack | null) => void;
+  isLive?: () => boolean;
+  /** The key system in use once a licence was asked for (e.g. "com.widevine.alpha"). */
+  drmInfo?: () => { keySystem?: string } | null;
 };
+
+/** The error Shaka reports (shaka.util.Error): severity 2 is critical (playback stopped). */
+export type ShakaError = { code?: number; category?: number; severity?: number; message?: string; data?: unknown[] };
 
 export type ShakaPlayerConstructor = {
   new (): ShakaPlayerApi;
