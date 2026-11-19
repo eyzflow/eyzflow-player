@@ -12,7 +12,10 @@ import {
   type PlaybackLimitCode,
   type PlaybackLimitError,
 } from "./playback-session";
-import type { ShakaPlayerApi, ShakaTrack, ShakaTextTrack } from "./shaka-types";
+import type { ShakaError, ShakaPlayerApi, ShakaTrack, ShakaTextTrack } from "./shaka-types";
+import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
+import { AnalyticsCollector } from "./analytics/collector";
+import { BeatTransport } from "./analytics/transport";
 
 export type ShakaState = "idle" | "loading" | "ready" | "error";
 
@@ -26,6 +29,16 @@ export type UseShakaOptions = {
   loop?: boolean;
   /** Shown in the viewer's device list, e.g. "Living room". Defaults to the browser's description. */
   deviceName?: string;
+  /** The organisation's player key: checked for this site before playing, and needed for analytics. */
+  playerKey?: string;
+  /** The remote config id, sent with the licence check. */
+  configId?: string;
+  /** Send playback quality analytics (only with a player key whose analytics are on). Default true. */
+  analytics?: boolean;
+  /** Add CMCD data (with the analytics impression id) to manifest and segment requests. Default false. */
+  cmcd?: boolean;
+  /** The player key check refused this site or key. */
+  onLicenseError?: (error: PlayerLicenseError) => void;
   onReady?: () => void;
   onError?: (msg: string) => void;
   /** A plan's stream or device limit was reached, or the viewer was signed out on this device. */
@@ -38,6 +51,8 @@ export type UseShakaReturn = {
   errorMsg: string | null;
   /** Set when playback was refused or stopped by a stream or device limit. */
   limitError: PlaybackLimitError | null;
+  /** Set when the player key check refused this site or key. */
+  licenseError: PlayerLicenseError | null;
   playing: boolean;
   currentTime: number;
   duration: number;
@@ -63,7 +78,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, onLicenseError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
@@ -71,6 +86,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [state, setState] = useState<ShakaState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [limitError, setLimitError] = useState<PlaybackLimitError | null>(null);
+  const [licenseError, setLicenseError] = useState<PlayerLicenseError | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -138,10 +154,14 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
   const onLimitReachedRef = useRef(onLimitReached);
+  const onLicenseErrorRef = useRef(onLicenseError);
+  const configIdRef = useRef(configId);
   useEffect(() => {
     onReadyRef.current = onReady;
     onErrorRef.current = onError;
     onLimitReachedRef.current = onLimitReached;
+    onLicenseErrorRef.current = onLicenseError;
+    configIdRef.current = configId;
   });
 
   const fail = useCallback((msg: string) => {
@@ -156,6 +176,14 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setState("error");
     setErrorMsg(limitMessage(limit.code));
     onErrorRef.current?.(limitMessage(limit.code));
+  }, []);
+
+  const failLicense = useCallback((license: PlayerLicenseError) => {
+    setLicenseError(license);
+    onLicenseErrorRef.current?.(license);
+    setState("error");
+    setErrorMsg(license.message);
+    onErrorRef.current?.(license.message);
   }, []);
 
   const refreshTracks = useCallback(() => {
@@ -179,6 +207,18 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
     let cancelled = false;
     setLimitError(null);
+    setLicenseError(null);
+
+    // The player key check (this site may play) and the analytics of this impression, when the embedder gave a key.
+    let license: LicenseSession | null = null;
+    let collector: AnalyticsCollector | null = null;
+    let transport: BeatTransport | null = null;
+    const endAnalytics = () => {
+      transport?.stop();
+      transport = null;
+      collector?.destroy();
+      collector = null;
+    };
 
     // The playback session that counts this stream against the plan's limits (storefront viewers only).
     let session: { target: Parameters<typeof closePlaybackSession>[0]; id: string } | null = null;
@@ -249,7 +289,14 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
       player.addEventListener("error", (event: Event) => {
         if (cancelled) return;
-        const detail = (event as CustomEvent<{ message?: string; code?: number }>).detail;
+        const detail = (event as CustomEvent<ShakaError>).detail;
+        collector?.recordError({ code: detail?.code ?? "UNKNOWN", category: detail?.category ?? null, message: detail?.message ?? null, fatal: detail?.severity !== 1 });
+        const siteRefused = licenseCodeIn(detail);
+        if (siteRefused) {
+          endSession();
+          failLicense({ code: siteRefused, message: licenseMessage(siteRefused) });
+          return;
+        }
         const refused = limitCodeIn(detail);
         if (refused) {
           endSession();
@@ -265,6 +312,44 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("trackschanged", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
+
+      if (playerKey) {
+        try {
+          license = await LicenseSession.start({ key: playerKey, streamId, configId: configIdRef.current }, (refusal) => {
+            // The key was switched off or the site removed while playing: stop when the organisation enforces.
+            if (cancelled || license?.current.mode !== "enforce") return;
+            endSession();
+            endAnalytics();
+            void player.unload();
+            failLicense(refusal);
+          });
+        } catch (e) {
+          if (cancelled) return;
+          if (e instanceof PlayerLicenseException) {
+            failLicense(e.license);
+            return;
+          }
+          // The check could not be reached: play without a token (the DRM check still applies) and without analytics.
+        }
+        if (cancelled) {
+          license?.stop();
+          return;
+        }
+        if (license && license.current.analytics.enabled && analytics) {
+          collector = new AnalyticsCollector(video, player, { autoplay: !!autoPlay });
+          const session = license;
+          transport = new BeatTransport(collector, {
+            getToken: () => session.token,
+            streamId,
+            intervalSeconds: session.current.analytics.heartbeatIntervalSeconds,
+            isLive: () => player.isLive?.() ?? false,
+            autoplay: !!autoPlay,
+            drm: () => (isProtected ? drmName(player.drmInfo?.()?.keySystem) : "none"),
+          });
+          transport.start();
+          if (cmcd) player.configure({ cmcd: { enabled: true, sessionId: transport.impressionId, contentId: streamId } });
+        }
+      }
 
       if (isProtected && drmAuthorizationKey) {
         const deviceId = getDeviceId();
@@ -301,7 +386,9 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
             // Any other failure leaves the limits to the licence request, which counts this stream itself.
           }
         }
-        configureDrm(player, shaka, streamId, drmAuthorizationKey, parameters);
+        configureDrm(player, shaka, streamId, drmAuthorizationKey, () =>
+          license ? { ...parameters, player_token: license.token } : parameters,
+        );
       }
 
       try {
@@ -309,6 +396,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         if (cancelled) return;
         setState("ready");
         setErrorMsg(null);
+        collector?.markReady();
         refreshTracks();
         onReadyRef.current?.();
         if (autoPlay) {
@@ -319,6 +407,12 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       } catch (err: unknown) {
         if (cancelled) return;
         const e = err as { code?: number; message?: string };
+        if (collector && collector.currentState !== "error") collector.recordError({ code: e?.code ?? "LOAD_FAILED", message: e?.message ?? null });
+        const siteRefused = licenseCodeIn(err);
+        if (siteRefused) {
+          failLicense({ code: siteRefused, message: licenseMessage(siteRefused) });
+          return;
+        }
         const msg = e?.code
           ? `Playback error ${e.code}${e.message ? `: ${e.message}` : ""}`
           : err instanceof Error
@@ -332,6 +426,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       cancelled = true;
       window.removeEventListener("pagehide", endSession);
       endSession();
+      endAnalytics();
+      license?.stop();
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("durationchange", onDuration);
       video.removeEventListener("loadedmetadata", onDuration);
@@ -344,7 +440,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, fail, failLimit, refreshTracks, bindCueTrack, unbindCueTrack]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
@@ -402,6 +498,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     state,
     errorMsg,
     limitError,
+    licenseError,
     playing,
     currentTime,
     duration,
@@ -424,6 +521,32 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     disableCaptions,
     toggleCaptions,
   };
+}
+
+/** The DRM system's short name, from a key system id. */
+function drmName(keySystem: string | undefined): string | null {
+  if (!keySystem) return null;
+  if (keySystem.includes("widevine")) return "widevine";
+  if (keySystem.includes("playready")) return "playready";
+  if (keySystem.includes("fps") || keySystem.includes("fairplay")) return "fairplay";
+  if (keySystem.includes("clearkey")) return "clearkey";
+  return null;
+}
+
+const LICENSE_CODE_PATTERN = /"code"\s*:\s*"([A-Z_]+)"/g;
+
+/** A licence request refused by the player key site check: its code, from the response text Shaka keeps. */
+function licenseCodeIn(detail: unknown): PlayerLicenseCode | null {
+  let text: string;
+  try {
+    text = JSON.stringify(detail).replace(/\\"/g, '"');
+  } catch {
+    return null;
+  }
+  for (const match of text.matchAll(LICENSE_CODE_PATTERN)) {
+    if (LICENSE_CODES.has(match[1])) return match[1] as PlayerLicenseCode;
+  }
+  return null;
 }
 
 const LIMIT_CODE_PATTERN = /"code"\s*:\s*"(STREAM_LIMIT|DEVICE_LIMIT|DEVICE_REVOKED|SESSION_REVOKED|PLAYBACK_SESSION_ENDED)"/;
