@@ -5,6 +5,7 @@ export function PlayerPage() {
   const streamId = params.get("streamId");
   const configId = params.get("configId") ?? undefined;
   const drmKey = params.get("drmKey") ?? undefined;
+  const storefrontId = params.get("storefrontId") ?? undefined;
   const autoPlay = params.get("autoPlay") !== "false";
 
   if (!streamId) {
@@ -32,6 +33,7 @@ export function PlayerPage() {
         streamId={streamId}
         configId={configId}
         drmAuthorizationKey={drmKey}
+        storefrontId={storefrontId}
         autoPlay={autoPlay}
         fill
       />

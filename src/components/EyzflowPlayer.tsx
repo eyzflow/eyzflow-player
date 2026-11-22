@@ -5,6 +5,7 @@ import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { PlayerOverlay } from "./PlayerOverlay";
+import type { PlaybackLimitError } from "../lib/playback-session";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -31,6 +32,15 @@ export type EyzflowPlayerProps = {
   config?: Partial<PlayerConfig>;
   /** DRM authorization key for the logged-in user. Required when stream is DRM-protected. */
   drmAuthorizationKey?: string;
+  /**
+   * The storefront the viewer watches on (else `drm.parameters.storefront_id` from the config). With it the player
+   * opens a playback session, so the plan's stream and device limits apply, and heartbeats it while playing.
+   */
+  storefrontId?: string;
+  /** Shown in the viewer's device list, e.g. "Living room". */
+  deviceName?: string;
+  /** A stream or device limit was reached, or the viewer was signed out on this device. */
+  onLimitReached?: (limit: PlaybackLimitError) => void;
   /** Override isProtected (default comes from config) */
   isProtected?: boolean;
   autoPlay?: boolean;
@@ -46,6 +56,9 @@ export function EyzflowPlayer({
   configId,
   config: configProp,
   drmAuthorizationKey,
+  storefrontId,
+  deviceName,
+  onLimitReached,
   isProtected: isProtectedProp,
   autoPlay: autoPlayProp,
   controls: controlsProp,
@@ -81,8 +94,11 @@ export function EyzflowPlayer({
   };
 
   // Value-keyed so an inline `config` prop doesn't tear down playback each render.
-  const drmParametersKey = config.drm?.parameters
-    ? JSON.stringify(config.drm.parameters)
+  const mergedDrmParameters = storefrontId
+    ? { ...config.drm?.parameters, storefront_id: storefrontId }
+    : config.drm?.parameters;
+  const drmParametersKey = mergedDrmParameters
+    ? JSON.stringify(mergedDrmParameters)
     : "";
   const drmParameters = useMemo(
     () =>
@@ -97,11 +113,13 @@ export function EyzflowPlayer({
     isProtected: resolved.isProtected,
     drmAuthorizationKey,
     drmParameters,
+    deviceName,
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,
     onReady,
     onError,
+    onLimitReached,
   });
 
   // Auto-hide controls after 3s of pointer inactivity, but only while playing.
