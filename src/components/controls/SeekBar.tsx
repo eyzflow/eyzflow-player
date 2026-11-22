@@ -11,7 +11,7 @@ type Props = {
   getThumbnail?: (time: number) => Promise<ShakaThumbnail | null>;
 };
 
-/** Width the preview tile is drawn at; the sprite tile is scaled to it. */
+/** Width a preview tile is drawn at when the sprite's size is known; otherwise tiles keep their own size. */
 const PREVIEW_WIDTH = 176;
 
 type Preview = { time: number; x: number; thumbnail: ShakaThumbnail | null };
@@ -57,7 +57,8 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, getThumbnail 
 
   // Without thumbnails (a new stream has none yet) nothing is drawn.
   const tile = getThumbnail ? preview?.thumbnail : null;
-  const scale = tile && tile.width > 0 ? PREVIEW_WIDTH / tile.width : 1;
+  // Scaling a sprite needs its full size, which WebVTT thumbnails don't give.
+  const scale = tile && tile.width > 0 && tile.imageWidth > 0 ? PREVIEW_WIDTH / tile.width : 1;
 
   return (
     <div
