@@ -1,17 +1,24 @@
 import { MAX_PLAY_STEP_S, PREROLL_WINDOW_S } from "./ad-breaks";
 
-/** How long before a mid-roll the notice counts down ("Ad in 5" … "Ad in 1"). */
+/** How long before a mid-roll the notice counts down ("Ad in 5" … "Ad in 1") when the config doesn't say. */
 export const AD_COUNTDOWN_S = 5;
+export const AD_COUNTDOWN_MAX_S = 30;
+
+/** The config's `ads.countdownSeconds` as a length to use: whole seconds from 1 to 30, else the default 5. */
+export function countdownLength(configured: unknown): number {
+  if (typeof configured !== "number" || !Number.isFinite(configured)) return AD_COUNTDOWN_S;
+  return Math.min(AD_COUNTDOWN_MAX_S, Math.max(1, Math.round(configured)));
+}
 
 /**
- * The whole seconds left (5 … 1) until the next break start ahead of `current`, or null when none is within
- * AD_COUNTDOWN_S.
+ * The whole seconds left (`length` … 1) until the next break start ahead of `current`, or null when none is within
+ * `length` seconds.
  */
-export function countdownSeconds(current: number, starts: readonly number[]): number | null {
+export function countdownSeconds(current: number, starts: readonly number[], length = AD_COUNTDOWN_S): number | null {
   let next = Infinity;
   for (const start of starts) if (start > current && start < next) next = start;
   const left = next - current;
-  if (!(left > 0) || left > AD_COUNTDOWN_S) return null;
+  if (!(left > 0) || left > length) return null;
   return Math.max(1, Math.ceil(left));
 }
 

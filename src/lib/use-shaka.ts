@@ -16,7 +16,7 @@ import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, ty
 import { loadIma } from "./ima-loader";
 import { AdBreakSchedule, type TimelineRegionLike } from "./ad-breaks";
 import { withTargeting } from "./ad-tag";
-import { CuePointSchedule, countdownSeconds, type CuePointLike } from "./ad-countdown";
+import { CuePointSchedule, countdownLength, countdownSeconds, type CuePointLike } from "./ad-countdown";
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
 import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
@@ -48,6 +48,8 @@ export type UseShakaOptions = {
   adTagUrl?: string;
   /** Count down the last 5 s before a mid-roll ("Ad in 5"): the config's `features.adCountdown`. Default on. */
   adCountdown?: boolean;
+  /** How many seconds the countdown shows: the config's `ads.countdownSeconds` (1–30). Default 5. */
+  adCountdownSeconds?: number;
   /** The player key check refused this site or key. */
   onLicenseError?: (error: PlayerLicenseError) => void;
   onReady?: () => void;
@@ -62,7 +64,7 @@ export type UseShakaReturn = {
   adContainerRef: React.RefObject<HTMLDivElement | null>;
   /** A linear ad is playing: the content is paused and its controls should be hidden. */
   adPlaying: boolean;
-  /** Seconds (5 … 1) until a mid-roll starts, while the notice should show; otherwise null. */
+  /** Seconds (the countdown's length … 1) until a mid-roll starts, while the notice should show; otherwise null. */
   adCountdown: number | null;
   state: ShakaState;
   errorMsg: string | null;
@@ -95,7 +97,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, onLicenseError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
@@ -106,9 +108,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [adCountdown, setAdCountdown] = useState<number | null>(null);
   // Read while playing, so switching it doesn't reload the stream.
   const adCountdownOnRef = useRef(adCountdownOn);
+  const adCountdownLengthRef = useRef(countdownLength(adCountdownSeconds));
   useEffect(() => {
     adCountdownOnRef.current = adCountdownOn;
-  }, [adCountdownOn]);
+    adCountdownLengthRef.current = countdownLength(adCountdownSeconds);
+  }, [adCountdownOn, adCountdownSeconds]);
 
   const [state, setState] = useState<ShakaState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -389,7 +393,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       if (cancelled) return;
       let left: number | null = null;
       if (adCountdownOnRef.current && adsOn() && !adPlayingRef.current && !seeking && !video.paused && !isRemotePlayback(video)) {
-        left = countdownSeconds(video.currentTime, adBreaks.hasBreaks ? adBreaks.upcomingStarts() : cuePoints.upcoming());
+        left = countdownSeconds(
+          video.currentTime,
+          adBreaks.hasBreaks ? adBreaks.upcomingStarts() : cuePoints.upcoming(),
+          adCountdownLengthRef.current,
+        );
       }
       setAdCountdown(left);
     };

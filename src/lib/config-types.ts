@@ -30,6 +30,8 @@ export type PlayerCastConfig = {
 
 export type PlayerAdsConfig = {
   adTagUrl: string;
+  /** Seconds the countdown before a mid-roll shows (`features.adCountdown`), 1–30. Missing: 5. */
+  countdownSeconds?: number;
 };
 
 export type PlayerDrmConfig = {

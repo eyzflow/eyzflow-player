@@ -144,6 +144,7 @@ export function EyzflowPlayer({
     // Both the Ads switch and a tag are needed: the switch turns ads off without losing the tag.
     adTagUrl: (config.features.ads && config.ads?.adTagUrl.trim()) || undefined,
     adCountdown: config.features.adCountdown !== false,
+    adCountdownSeconds: config.ads?.countdownSeconds,
     onReady,
     onError,
     onLimitReached,

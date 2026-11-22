@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdBreakSchedule } from "./ad-breaks";
-import { CuePointSchedule, adCountdownLabel, countdownSeconds } from "./ad-countdown";
+import { CuePointSchedule, adCountdownLabel, countdownLength, countdownSeconds } from "./ad-countdown";
 
 const scte = (id: string, start: number) => ({ schemeIdUri: "urn:scte:scte35:2014:xml+bin", id, startTime: start, endTime: start + 30 });
 
@@ -17,6 +17,25 @@ describe("countdownSeconds", () => {
   it("uses the nearest break ahead", () => {
     expect(countdownSeconds(57, [30, 60, 90])).toBe(3);
     expect(countdownSeconds(10, [])).toBeNull();
+  });
+});
+
+describe("countdown length", () => {
+  it("counts down as long as the config says", () => {
+    expect(countdownSeconds(19.5, [30], 10)).toBeNull();
+    expect(countdownSeconds(20, [30], 10)).toBe(10);
+    expect(countdownSeconds(27.5, [30], 3)).toBe(3);
+    expect(countdownSeconds(26.5, [30], 3)).toBeNull();
+  });
+
+  it("takes whole seconds from 1 to 30, else 5", () => {
+    expect(countdownLength(undefined)).toBe(5);
+    expect(countdownLength("8")).toBe(5);
+    expect(countdownLength(Number.NaN)).toBe(5);
+    expect(countdownLength(8)).toBe(8);
+    expect(countdownLength(0)).toBe(1);
+    expect(countdownLength(90)).toBe(30);
+    expect(countdownLength(7.4)).toBe(7);
   });
 });
 
