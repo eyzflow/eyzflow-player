@@ -12,7 +12,7 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./style": "./src/components/EyzflowPlayer.css"
+    "./style": "./src/components/EYZFlowPlayer.css"
   },
   "files": [
     "src"

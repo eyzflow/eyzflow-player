@@ -15,12 +15,12 @@ React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG]
 ## Use
 
 ```tsx
-import { EyzflowPlayer } from "eyzflow-player";
+import { EYZFlowPlayer } from "eyzflow-player";
 import "eyzflow-player/style";
 
 export function Watch() {
   return (
-    <EyzflowPlayer
+    <EYZFlowPlayer
       streamId="your-stream-id"
       configId="your-player-config-id"
       drmAuthorizationKey={drmKey}
@@ -75,7 +75,7 @@ The intro, recap, opening and closing credits marked on a stream in the dashboar
 Pass the films and the player does the rest: at the closing credits the video shrinks into the top-right corner, "Up next" counts down and plays the next stream at 0, and a row of films can be picked. A picked film plays in place.
 
 ```tsx
-<EyzflowPlayer
+<EYZFlowPlayer
   streamId={episode.streamId}
   endScreen={{
     nextUp: { streamId: next.streamId, title: next.title, poster: next.poster, badge: "S1 E2" },
@@ -101,7 +101,7 @@ Pass the films and the player does the rest: at the closing credits the video sh
 `renderOverlay` draws your own UI inside the player while playback is in a signal or after the film ended: similar films, a "Next episode" card, an end screen. The player calls it with the moment and controls, and shows what it returns; return `null` to show nothing.
 
 ```tsx
-<EyzflowPlayer
+<EYZFlowPlayer
   streamId={id}
   renderOverlay={({ signal, ended, controls }) =>
     signal?.type === "closing_credits" || ended ? (

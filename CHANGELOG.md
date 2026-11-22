@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Renamed (EYF-225): `EyzflowPlayer`, `EyzflowPlayerProps` and `EyzflowPlayerAnalyticsOptions` are now
+  `EYZFlowPlayer`, `EYZFlowPlayerProps` and `EYZFlowPlayerAnalyticsOptions`, matching the product name. The old names
+  still work and are marked deprecated; they are removed in 0.5.0. The package name and `eyzflow-player/style` are
+  unchanged.
+
 ## 0.3.0
 
 - Skip intro, recap and credits (EYF-213): while playback is in one of the stream's signals (Stream → Signals in the
