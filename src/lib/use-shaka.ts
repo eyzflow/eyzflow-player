@@ -15,6 +15,7 @@ import {
 import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
 import { loadIma } from "./ima-loader";
 import { AdBreakSchedule, type TimelineRegionLike } from "./ad-breaks";
+import { withTargeting } from "./ad-tag";
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
 import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
@@ -230,6 +231,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     // manifest, so a pre-roll is usually ready by the time the content is.
     const imaReady = adTagUrl ? loadIma().catch(() => null) : null;
     let adManager: ShakaAdManager | null = null;
+    // A storefront viewer's playback session says whether their plan plays ads (false: none at all) and how to
+    // target them. Without a session, the player config decides.
+    let planAds: boolean | null = null;
+    let adTargeting: Record<string, string> = {};
+    const adsOn = () => !!adTagUrl && planAds !== false;
     // The ad breaks marked on the stream (SCTE-35 events in the MPD). With any, ads play only at them.
     const adBreaks = new AdBreakSchedule();
     // A mid-roll holds the content at its marker until the ad starts, or until it turns out there is none.
@@ -289,7 +295,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     ];
     /** IMA and Shaka's ad manager, set up once per impression; null when ads cannot play here. */
     const adsReady = async (player: ShakaPlayerApi) => {
-      if (!adTagUrl || !imaReady) return null;
+      if (!adsOn() || !imaReady) return null;
       const ima = await imaReady;
       if (cancelled || !ima) return null;
       if (adManager) return { ima, manager: adManager };
@@ -303,7 +309,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     };
     const sendAdRequest = (ready: NonNullable<Awaited<ReturnType<typeof adsReady>>>, willAutoPlay: boolean) => {
       const request = new ready.ima.AdsRequest();
-      request.adTagUrl = adTagUrl!;
+      request.adTagUrl = withTargeting(adTagUrl!, adTargeting);
       request.linearAdSlotWidth = video.clientWidth;
       request.linearAdSlotHeight = video.clientHeight;
       request.nonLinearAdSlotWidth = video.clientWidth;
@@ -355,7 +361,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       const previous = lastTime;
       lastTime = now;
       const player = playerRef.current;
-      if (!adTagUrl || seeking || adPlayingRef.current || video.paused || !player) return;
+      if (!adsOn() || seeking || adPlayingRef.current || video.paused || !player) return;
       if (adBreaks.due(previous, now)) void playBreak(player);
     };
     const onSeeking = () => { seeking = true; };
@@ -517,18 +523,22 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         }
       }
 
-      if (isProtected && drmAuthorizationKey) {
-        const deviceId = getDeviceId();
-        const parameters: Record<string, unknown> = { ...drmParameters, device_id: deviceId };
-        const storefrontId = drmParameters?.storefront_id;
+      // A storefront viewer (signed in, with a storefront): the playback session counts this stream against the
+      // plan's limits and says whether the plan plays ads. Opened for clear streams too, for the ads answer.
+      const storefrontId = drmParameters?.storefront_id;
+      const deviceId = drmAuthorizationKey ? getDeviceId() : null;
+      const parameters: Record<string, unknown> = { ...drmParameters, device_id: deviceId };
+      if (drmAuthorizationKey) {
         if (typeof storefrontId === "string" && storefrontId) {
-          const target = { storefrontId, authorization: drmAuthorizationKey, deviceId };
+          const target = { storefrontId, authorization: drmAuthorizationKey, deviceId: deviceId! };
           try {
             const opened = await openPlaybackSession({ ...target, streamId, deviceName });
             if (cancelled) {
               if (opened.id) closePlaybackSession(target, opened.id);
               return;
             }
+            planAds = opened.ads;
+            adTargeting = opened.adTargeting;
             if (opened.id) {
               const current = { target, id: opened.id };
               session = current;
@@ -549,12 +559,15 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
               failLimit(e.limit);
               return;
             }
-            // Any other failure leaves the limits to the licence request, which counts this stream itself.
+            // Any other failure leaves the limits to the licence request, which counts this stream itself; ads follow
+            // the player config.
           }
         }
-        configureDrm(player, shaka, streamId, drmAuthorizationKey, () =>
-          license ? { ...parameters, player_token: license.token } : parameters,
-        );
+        if (isProtected) {
+          configureDrm(player, shaka, streamId, drmAuthorizationKey, () =>
+            license ? { ...parameters, player_token: license.token } : parameters,
+          );
+        }
       }
 
       try {

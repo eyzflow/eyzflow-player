@@ -35,7 +35,23 @@ export type PlaybackSession = {
   /** Null while the storefront's limits are off: nothing to heartbeat. */
   id: string | null;
   heartbeatIntervalSeconds: number;
+  /**
+   * Whether the viewer's plan plays ads for this title (its plan asks for ads, or it is a free AVOD product). Null
+   * when the backend did not say: the player config decides.
+   */
+  ads: boolean | null;
+  /** Key-values for the ad request's `cust_params`, e.g. `{ plan: "basic-ads", access: "svod" }`. */
+  adTargeting: Record<string, string>;
 };
+
+function stringRecord(v: unknown): Record<string, string> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, value] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof value === "string" && value) out[k] = value;
+  }
+  return out;
+}
 
 type SessionTarget = {
   storefrontId: string;
@@ -86,8 +102,18 @@ export async function openPlaybackSession(
     if (limit) throw new PlaybackLimitException(limit);
     throw new Error(`Could not start playback (${res.status}).`);
   }
-  const body = (await res.json()) as { id?: string | null; heartbeat_interval_seconds?: number };
-  return { id: body.id ?? null, heartbeatIntervalSeconds: body.heartbeat_interval_seconds ?? 30 };
+  const body = (await res.json()) as {
+    id?: string | null;
+    heartbeat_interval_seconds?: number;
+    ads?: unknown;
+    ad_targeting?: unknown;
+  };
+  return {
+    id: body.id ?? null,
+    heartbeatIntervalSeconds: body.heartbeat_interval_seconds ?? 30,
+    ads: typeof body.ads === "boolean" ? body.ads : null,
+    adTargeting: stringRecord(body.ad_targeting),
+  };
 }
 
 /** Keeps the session open. Returns false when it was ended elsewhere (device removed, signed out everywhere). */
