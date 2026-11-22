@@ -111,6 +111,9 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
+  // The previous player's teardown: a new stream on the same <video> waits for it, or the two players overlap and the
+  // new load never starts.
+  const destroyingRef = useRef<Promise<unknown> | null>(null);
   const [adPlaying, setAdPlaying] = useState(false);
   // Read by play/seek and the autoplay kick, which must not touch the content while an ad plays over it.
   const adPlayingRef = useRef(false);
@@ -535,6 +538,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         return;
       }
 
+      await destroyingRef.current?.catch(() => {});
+      if (cancelled) return;
       const player = new shaka.Player();
       await player.attach(video);
       if (cancelled) {
@@ -712,7 +717,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       unbindCueTrack();
       const p = playerRef.current;
       playerRef.current = null;
-      if (p) void p.destroy();
+      if (p) destroyingRef.current = p.destroy();
     };
   }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
 

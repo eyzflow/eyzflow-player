@@ -9,6 +9,12 @@
 - `renderOverlay` (EYF-218): the app's own UI inside the player at a signal or after the end, e.g. similar films at
   the closing credits. It stays in fullscreen, sits under the control bar, hides during ads, and gets `skip`, `seek`,
   `play`, `pause` and `dismiss`.
+- `endScreen` (EYF-220): a Netflix-style end screen from the films the app passes. At the closing credits the video
+  shrinks into a corner, "Up next" counts down and plays the next stream, and a picked film plays in place
+  (`onSelect`, which can prevent it). Customizable through the theme, `eyz-end-screen…` classes, `className`, `title`
+  and `renderItem`. The player config's `features.endScreen` and `endScreen` settings apply. Texts in en, de, fr, nl.
+- A new `streamId` now waits for the previous Shaka player's teardown before loading; switching streams could hang
+  before.
 
 ## 0.2.0
 

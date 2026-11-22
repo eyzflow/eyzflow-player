@@ -1,6 +1,7 @@
 import { EyzflowPlayer } from "../components/EyzflowPlayer";
 import { DEFAULT_FEATURES, type PlayerConfig } from "../lib/config-types";
 import type { SignalOverlayContext } from "../lib/signal-overlay";
+import type { EndScreenOptions } from "../lib/end-screen";
 
 export function PlayerPage() {
   const params = new URLSearchParams(window.location.search);
@@ -15,6 +16,8 @@ export function PlayerPage() {
   const adTag = params.get("adTag");
   // Shows three placeholder films at the closing credits and after the end, as a renderOverlay example.
   const overlayDemo = params.get("overlayDemo") === "1";
+  // The built-in end screen with placeholder films: "Up next" is `streamId`-2, the row `streamId`-a, -b, -c.
+  const endScreenDemo = params.get("endScreenDemo") === "1";
   const config: Partial<PlayerConfig> | undefined = adTag
     ? { features: { ...DEFAULT_FEATURES, ads: true }, ads: { adTagUrl: adTag } }
     : undefined;
@@ -50,6 +53,7 @@ export function PlayerPage() {
         storefrontId={storefrontId}
         autoPlay={autoPlay}
         renderOverlay={overlayDemo ? similarFilms : undefined}
+        endScreen={endScreenDemo ? demoEndScreen(streamId) : undefined}
         fill
       />
     </div>
@@ -104,4 +108,30 @@ function similarFilms({ signal, ended, controls }: SignalOverlayContext) {
       </div>
     </div>
   );
+}
+
+/** A 16:9 placeholder poster, as a data URL. */
+function demoPoster(hue: number): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},55%,42%)"/><stop offset="1" stop-color="hsl(${hue + 50},55%,18%)"/></linearGradient></defs><rect width="16" height="9" fill="url(#g)"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+function demoEndScreen(streamId: string): EndScreenOptions {
+  return {
+    nextUp: {
+      streamId: `${streamId}-2`,
+      title: "Episode 2: The Return",
+      description: "The crew follows a signal to the edge of charted space, where nothing is what it seems.",
+      poster: demoPoster(200),
+      badge: "S1 E2",
+    },
+    items: ["a", "b", "c"].map((id, i) => ({
+      streamId: `${streamId}-${id}`,
+      title: ["Northern Lights", "The Long Shore", "City of Glass"][i],
+      poster: demoPoster(20 + i * 90),
+      duration: [5520, 6300, 4980][i],
+      badge: i === 0 ? "New" : undefined,
+    })),
+    onSelect: (item, { autoplay }) => console.info(`[demo] end screen picked ${item.streamId}${autoplay ? " (autoplay)" : ""}`),
+  };
 }

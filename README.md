@@ -48,6 +48,7 @@ export function Watch() {
 | `onLicenseError` | `(error: PlayerLicenseError) => void` | The player key check refused this site or key. |
 | `onLimitReached` | `(limit: PlaybackLimitError) => void` | A stream or device limit was reached, or the viewer was signed out on this device. |
 | `onSignal` | `(signal: StreamSignal \| null) => void` | Playback entered an intro, recap or credits signal, or left one (`null`). See [Skip intro, recap and credits](#skip-intro-recap-and-credits). |
+| `endScreen` | `EndScreenOptions` | A Netflix-style end screen with "Up next" and a row of films you pass. See [End screen](#end-screen). |
 | `renderOverlay` | `(context: SignalOverlayContext) => ReactNode` | Your own UI over the player at a signal or after the end, e.g. similar films at the closing credits. See [Overlay](#overlay-at-the-credits). |
 
 See [`sample-config.json`](sample-config.json) for the shape of a player config.
@@ -67,6 +68,32 @@ The intro, recap, opening and closing credits marked on a stream in the dashboar
 
 - `features.skipButtons: false` hides the button. The signal is still reported to `onSignal`.
 - `onSignal` gets `{ id, type, start, end, label }` when playback enters a signal (`type` is `intro`, `recap`, `opening_credits` or `closing_credits`), and `null` when it leaves.
+
+## End screen
+
+Pass the films and the player does the rest: at the closing credits the video shrinks into the top-right corner, "Up next" counts down and plays the next stream at 0, and a row of films can be picked. A picked film plays in place.
+
+```tsx
+<EyzflowPlayer
+  streamId={episode.streamId}
+  endScreen={{
+    nextUp: { streamId: next.streamId, title: next.title, poster: next.poster, badge: "S1 E2" },
+    items: similar.map((f) => ({ streamId: f.streamId, title: f.title, poster: f.poster, duration: f.seconds })),
+    onSelect: (item, { autoplay, preventDefault }) => {
+      router.replace(`/watch/${item.streamId}`); // keep the app in step; or preventDefault() and handle it yourself
+    },
+  }}
+/>
+```
+
+- **Items:** `{ streamId, title, poster?, description?, duration? (seconds), badge?, data? }`. `nextUp` is one item, optionally with its own `autoplaySeconds`.
+- **When:** from the closing credits signal, or when the film ends if it has none (`showAt: "end"`: only at the end). The last second of the film counts as the end.
+- **Up next:** "Next in 10" … "Next in 1", then it plays; Cancel stops the countdown. It counts only while the credits play (or after the end).
+- **Picking:** plays the item in place and calls `onSelect(item, { autoplay, preventDefault })`. With `preventDefault()` the player leaves it to you. When you then change `streamId`, your value wins.
+- **Back:** "Back to credits", a click on the small video, or Esc, until the film ends.
+- **Customize:** it takes the player config's theme. Every part has an `eyz-end-screen…` class (`__next`, `__play`, `__cancel`, `__row`, `__heading`, `__items`, `__card`, `__card-poster`, `__card-title`, `__badge`, …), `className` adds your own, `title` renames the row, and `renderItem(item, { select })` draws a card your way. For a layout of your own, use `renderOverlay`, which wins when it returns something.
+- **Remote config:** `features.endScreen: false` turns it off; `endScreen.autoplaySeconds` (0–30, 0 = no countdown, default 10), `endScreen.showAt` (`credits` or `end`) and `endScreen.shrinkVideo` (default on) tune it. The prop's values win.
+- Texts in English, German, French and Dutch. Nothing shows during an ad. Try it on the dev page with `?endScreenDemo=1`.
 
 ## Overlay at the credits
 
