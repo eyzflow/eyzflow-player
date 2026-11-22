@@ -87,12 +87,12 @@ Pass the films and the player does the rest: at the closing credits the video sh
 ```
 
 - **Items:** `{ streamId, title, poster?, description?, duration? (seconds), badge?, data? }`. `nextUp` is one item, optionally with its own `autoplaySeconds`.
-- **When:** from the closing credits signal, or when the film ends if it has none (`showAt: "end"`: only at the end). The last second of the film counts as the end.
+- **When:** from the closing credits signal. A stream without one gets it `secondsBeforeEnd` seconds before the end (default 20; 0: only when the film ends), as at the credits. `showAt: "end"`: only when the film ends. The last second of the film counts as the end.
 - **Up next:** "Next in 10" … "Next in 1", then it plays; Cancel stops the countdown. It counts only while the credits play (or after the end).
 - **Picking:** plays the item in place and calls `onSelect(item, { autoplay, preventDefault })`. With `preventDefault()` the player leaves it to you. When you then change `streamId`, your value wins.
 - **Back:** "Back to credits", a click on the small video, or Esc, until the film ends.
 - **Customize:** it takes the player config's theme. Every part has an `eyz-end-screen…` class (`__next`, `__play`, `__cancel`, `__row`, `__heading`, `__items`, `__card`, `__card-poster`, `__card-title`, `__badge`, …), `className` adds your own, `title` renames the row, and `renderItem(item, { select })` draws a card your way. For a layout of your own, use `renderOverlay`, which wins when it returns something.
-- **Remote config:** `features.endScreen: false` turns it off; `endScreen.autoplaySeconds` (0–30, 0 = no countdown, default 10), `endScreen.showAt` (`credits` or `end`) and `endScreen.shrinkVideo` (default on) tune it. The prop's values win.
+- **Remote config:** `features.endScreen: false` turns it off; `endScreen.autoplaySeconds` (0–30, 0 = no countdown, default 10), `endScreen.showAt` (`credits` or `end`), `endScreen.shrinkVideo` (default on) and `endScreen.secondsBeforeEnd` (0–120, default 20) tune it. The prop's values win.
 - Texts in English, German, French and Dutch. Nothing shows during an ad. Try it on the dev page with `?endScreenDemo=1`.
 
 ## Overlay at the credits

@@ -69,6 +69,12 @@ export class SignalSchedule {
     return true;
   }
 
+  /** Whether the stream has a signal of this type, anywhere. */
+  has(type: StreamSignalType): boolean {
+    for (const signal of this.signals.values()) if (signal.type === type) return true;
+    return false;
+  }
+
   get size(): number {
     return this.signals.size;
   }

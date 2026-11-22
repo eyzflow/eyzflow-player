@@ -18,6 +18,7 @@ describe("endScreenSettings", () => {
       autoplaySeconds: 10,
       showAt: "credits",
       shrinkVideo: true,
+      secondsBeforeEnd: 20,
     });
   });
 
@@ -43,22 +44,44 @@ describe("endScreenSettings", () => {
 
 describe("endScreenPhase", () => {
   const on = endScreenSettings(config(), { items: [film] });
+  const at = (signal: StreamSignal | null, ended: boolean, position = 0, hasClosingCredits = true) => ({
+    signal,
+    ended,
+    position,
+    duration: 600,
+    hasClosingCredits,
+  });
 
   it("shows over the closing credits and after the end", () => {
-    expect(endScreenPhase(on, credits, false)).toBe("credits");
-    expect(endScreenPhase(on, null, true)).toBe("ended");
-    expect(endScreenPhase(on, intro, false)).toBeNull();
-    expect(endScreenPhase(on, null, false)).toBeNull();
+    expect(endScreenPhase(on, at(credits, false))).toBe("credits");
+    expect(endScreenPhase(on, at(null, true))).toBe("ended");
+    expect(endScreenPhase(on, at(intro, false))).toBeNull();
+    expect(endScreenPhase(on, at(null, false, 590))).toBeNull();
+  });
+
+  it("without a closing credits signal, the last 20 s count as the credits", () => {
+    expect(endScreenPhase(on, at(null, false, 579, false))).toBeNull();
+    expect(endScreenPhase(on, at(null, false, 580, false))).toBe("credits");
+    expect(endScreenPhase({ ...on, secondsBeforeEnd: 45 }, at(null, false, 556, false))).toBe("credits");
+    expect(endScreenPhase({ ...on, secondsBeforeEnd: 0 }, at(null, false, 595, false))).toBeNull();
+    expect(endScreenPhase(on, { ...at(null, false, 580, false), duration: 0 })).toBeNull();
   });
 
   it("with showAt end, only after the end", () => {
     const atEnd = { ...on, showAt: "end" as const };
-    expect(endScreenPhase(atEnd, credits, false)).toBeNull();
-    expect(endScreenPhase(atEnd, null, true)).toBe("ended");
+    expect(endScreenPhase(atEnd, at(credits, false))).toBeNull();
+    expect(endScreenPhase(atEnd, at(null, false, 590, false))).toBeNull();
+    expect(endScreenPhase(atEnd, at(null, true))).toBe("ended");
   });
 
   it("never when off", () => {
-    expect(endScreenPhase({ ...on, enabled: false }, credits, true)).toBeNull();
+    expect(endScreenPhase({ ...on, enabled: false }, at(credits, true))).toBeNull();
+  });
+
+  it("reads secondsBeforeEnd from the config and the prop, clamped", () => {
+    expect(endScreenSettings(config({ endScreen: { secondsBeforeEnd: 40 } }), { items: [film] }).secondsBeforeEnd).toBe(40);
+    expect(endScreenSettings(config(), { items: [film], secondsBeforeEnd: 500 }).secondsBeforeEnd).toBe(120);
+    expect(endScreenSettings(config(), { items: [film], secondsBeforeEnd: 0 }).secondsBeforeEnd).toBe(0);
   });
 });
 

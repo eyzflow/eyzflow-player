@@ -40,6 +40,11 @@ export type EndScreenOptions = {
   showAt?: "credits" | "end";
   /** Shrinks the credits into a corner while the end screen shows over them. */
   shrinkVideo?: boolean;
+  /**
+   * Without a closing credits signal on the stream, the end screen shows this many seconds before the end, as at the
+   * credits (0–120; 0: only when the film ends). Default 20.
+   */
+  secondsBeforeEnd?: number;
   /** False turns it off for this player, over the config. */
   enabled?: boolean;
   /** Extra class on the end screen's root, for the app's own styles. */
@@ -56,9 +61,13 @@ export type PlayerEndScreenConfig = {
   autoplaySeconds?: number;
   showAt?: "credits" | "end";
   shrinkVideo?: boolean;
+  /** Without a closing credits signal: seconds before the end it shows, 0–120. Missing: 20. */
+  secondsBeforeEnd?: number;
 };
 
 export const END_SCREEN_AUTOPLAY_S = 10;
+export const END_SCREEN_BEFORE_END_S = 20;
+export const END_SCREEN_BEFORE_END_MAX_S = 120;
 export const END_SCREEN_AUTOPLAY_MAX_S = 30;
 
 export type EndScreenSettings = {
@@ -66,11 +75,12 @@ export type EndScreenSettings = {
   autoplaySeconds: number;
   showAt: "credits" | "end";
   shrinkVideo: boolean;
+  secondsBeforeEnd: number;
 };
 
-function seconds(value: unknown): number | null {
+function seconds(value: unknown, max = END_SCREEN_AUTOPLAY_MAX_S): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.min(END_SCREEN_AUTOPLAY_MAX_S, Math.max(0, Math.round(value)));
+  return Math.min(max, Math.max(0, Math.round(value)));
 }
 
 /**
@@ -87,16 +97,42 @@ export function endScreenSettings(config: PlayerConfig, options?: EndScreenOptio
       seconds(options?.nextUp?.autoplaySeconds) ?? seconds(remote?.autoplaySeconds) ?? END_SCREEN_AUTOPLAY_S,
     showAt: showAt === "end" ? "end" : "credits",
     shrinkVideo: options?.shrinkVideo ?? remote?.shrinkVideo ?? true,
+    secondsBeforeEnd:
+      seconds(options?.secondsBeforeEnd, END_SCREEN_BEFORE_END_MAX_S) ??
+      seconds(remote?.secondsBeforeEnd, END_SCREEN_BEFORE_END_MAX_S) ??
+      END_SCREEN_BEFORE_END_S,
   };
 }
 
 /** When the end screen shows: over the closing credits, after the end, or not now. */
 export type EndScreenPhase = "credits" | "ended" | null;
 
-export function endScreenPhase(settings: EndScreenSettings, signal: StreamSignal | null, ended: boolean): EndScreenPhase {
+/** Where playback is, for `endScreenPhase`. */
+export type EndScreenPlayback = {
+  signal: StreamSignal | null;
+  /** Ended, or in the film's last second. */
+  ended: boolean;
+  /** Seconds. */
+  position: number;
+  /** Seconds; 0 while unknown. */
+  duration: number;
+  /** The stream marks its closing credits. */
+  hasClosingCredits: boolean;
+};
+
+/**
+ * Over the closing credits; on a stream without them, the last `secondsBeforeEnd` seconds count as the credits. After
+ * the end. Or not now.
+ */
+export function endScreenPhase(settings: EndScreenSettings, playback: EndScreenPlayback): EndScreenPhase {
   if (!settings.enabled) return null;
-  if (ended) return "ended";
-  if (settings.showAt === "credits" && signal?.type === "closing_credits") return "credits";
+  if (playback.ended) return "ended";
+  if (settings.showAt !== "credits") return null;
+  if (playback.signal?.type === "closing_credits") return "credits";
+  const { duration, position, hasClosingCredits } = playback;
+  if (!hasClosingCredits && settings.secondsBeforeEnd > 0 && duration > 0 && position >= duration - settings.secondsBeforeEnd) {
+    return "credits";
+  }
   return null;
 }
 

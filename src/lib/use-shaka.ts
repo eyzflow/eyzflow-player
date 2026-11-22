@@ -94,6 +94,8 @@ export type UseShakaReturn = {
   skipSignal: () => void;
   /** The film played to its end (until it plays or seeks again). */
   ended: boolean;
+  /** The stream marks its closing credits (a closing credits signal). */
+  hasClosingCredits: boolean;
   play: () => void;
   pause: () => void;
   seek: (seconds: number) => void;
@@ -144,6 +146,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [activeCueLines, setActiveCueLines] = useState<string[]>([]);
   const [activeSignal, setActiveSignal] = useState<StreamSignal | null>(null);
   const [ended, setEnded] = useState(false);
+  const [hasClosingCredits, setHasClosingCredits] = useState(false);
   // Compared on each time update, so the state (and onSignal) only changes when playback enters or leaves a signal.
   const activeSignalRef = useRef<StreamSignal | null>(null);
 
@@ -263,6 +266,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     activeSignalRef.current = null;
     setActiveSignal(null);
     setEnded(false);
+    setHasClosingCredits(false);
 
     // Client-side ads through Shaka's ad manager and IMA. The SDK starts loading now, alongside the licence and
     // manifest, so a pre-roll is usually ready by the time the content is.
@@ -409,7 +413,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const onRegionAdded = (e: Event) => {
       const region = (e as CustomEvent<SignalRegionLike>).detail;
       if (!region) return;
-      if (!adBreaks.addRegion(region) && signals.addRegion(region)) updateSignal();
+      if (!adBreaks.addRegion(region) && signals.addRegion(region)) {
+        if (signals.has("closing_credits")) setHasClosingCredits(true);
+        updateSignal();
+      }
     };
     const checkAdBreak = () => {
       const now = video.currentTime;
@@ -806,6 +813,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     activeSignal,
     skipSignal,
     ended,
+    hasClosingCredits,
     play,
     pause,
     seek,

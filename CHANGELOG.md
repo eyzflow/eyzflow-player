@@ -13,6 +13,7 @@
   shrinks into a corner, "Up next" counts down and plays the next stream, and a picked film plays in place
   (`onSelect`, which can prevent it). Customizable through the theme, `eyz-end-screen…` classes, `className`, `title`
   and `renderItem`. The player config's `features.endScreen` and `endScreen` settings apply. Texts in en, de, fr, nl.
+  A stream without a closing credits signal gets it `secondsBeforeEnd` seconds before the end (default 20).
 - A new `streamId` now waits for the previous Shaka player's teardown before loading; switching streams could hang
   before.
 

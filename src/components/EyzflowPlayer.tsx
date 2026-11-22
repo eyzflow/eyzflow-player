@@ -182,7 +182,8 @@ export function EyzflowPlayer({
     onLimitReached,
   });
 
-  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause, playing, currentTime, duration } = shaka;
+  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause, playing, currentTime, duration, hasClosingCredits } =
+    shaka;
 
   // The app's overlay: asked for at a signal or after the end, until dismissed for that moment.
   const moment = overlayMoment(activeSignal, ended);
@@ -204,7 +205,13 @@ export function EyzflowPlayer({
   const nearEnd = duration > 0 && currentTime >= duration - 1;
   const endShownPhase =
     endScreen && !overlayShown && !adPlaying && state === "ready"
-      ? endScreenPhase(endSettings, activeSignal, ended || nearEnd)
+      ? endScreenPhase(endSettings, {
+          signal: activeSignal,
+          ended: ended || nearEnd,
+          position: currentTime,
+          duration,
+          hasClosingCredits,
+        })
       : null;
   const endMomentKey = endShownPhase && `${playingStreamId}:${endShownPhase}`;
   const [dismissedEndMoment, setDismissedEndMoment] = useState<string | null>(null);
