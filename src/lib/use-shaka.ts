@@ -12,7 +12,8 @@ import {
   type PlaybackLimitCode,
   type PlaybackLimitError,
 } from "./playback-session";
-import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
+import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaThumbnail, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
+import { audioPreference, bitrateRestrictions, matchesLanguage } from "./playback-preferences";
 import { loadIma } from "./ima-loader";
 import { AdBreakSchedule } from "./ad-breaks";
 import { SignalSchedule, type SignalRegionLike, type StreamSignal } from "./stream-signals";
@@ -26,6 +27,8 @@ export type ShakaState = "idle" | "loading" | "ready" | "error";
 
 export type UseShakaOptions = {
   streamId: string;
+  /** Hold off loading, e.g. while the remote config loads (the <video> is not rendered yet). */
+  deferLoad?: boolean;
   isProtected: boolean;
   drmAuthorizationKey?: string;
   drmParameters?: Record<string, unknown>;
@@ -59,6 +62,23 @@ export type UseShakaOptions = {
   onError?: (msg: string) => void;
   /** A plan's stream or device limit was reached, or the viewer was signed out on this device. */
   onLimitReached?: (limit: PlaybackLimitError) => void;
+  /** Audio language to start in when the stream has it (BCP 47, e.g. "de"). Read when a stream loads. */
+  preferredAudioLanguage?: string;
+  /** Subtitles to show from the start when the stream has them in this language. Read when a stream loads. */
+  preferredSubtitleLanguage?: string;
+  /** Highest bitrate (bits per second, video and audio together) the player picks. Read when a stream loads. */
+  maxBitrate?: number;
+  /** A WebVTT thumbnails track (sprites with #xywh) for the seek bar preview. Read when a stream loads. */
+  thumbnailsUrl?: string;
+  /** Where the stream starts, in seconds. Read when a stream loads. */
+  startTime?: number;
+  /** About four times a second while playing, and after a seek. */
+  onTimeUpdate?: (time: number, duration: number) => void;
+  onPause?: (time: number) => void;
+  /** A seek finished at `time` (from the seek bar, a skip button or the app). */
+  onSeeked?: (time: number) => void;
+  /** The stream played to its end. */
+  onEnded?: () => void;
 };
 
 export type UseShakaReturn = {
@@ -105,10 +125,13 @@ export type UseShakaReturn = {
   selectTextTrack: (track: ShakaTextTrack) => void;
   disableCaptions: () => void;
   toggleCaptions: () => void;
+  /** The seek bar preview at `time`, or null when the stream has no thumbnails track. */
+  getThumbnail: (time: number) => Promise<ShakaThumbnail | null>;
+  hasThumbnails: boolean;
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal } = options;
+  const { streamId, deferLoad = false, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal, onTimeUpdate: onTimeUpdateCb, onPause: onPauseCb, onSeeked: onSeekedCb, onEnded: onEndedCb } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
@@ -147,6 +170,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [activeSignal, setActiveSignal] = useState<StreamSignal | null>(null);
   const [ended, setEnded] = useState(false);
   const [hasClosingCredits, setHasClosingCredits] = useState(false);
+  const thumbnailsTrackRef = useRef<number | null>(null);
+  const [hasThumbnails, setHasThumbnails] = useState(false);
   // Compared on each time update, so the state (and onSignal) only changes when playback enters or leaves a signal.
   const activeSignalRef = useRef<StreamSignal | null>(null);
 
@@ -207,6 +232,19 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const onLicenseErrorRef = useRef(onLicenseError);
   const onSignalRef = useRef(onSignal);
   const configIdRef = useRef(configId);
+  const onTimeUpdateRef = useRef(onTimeUpdateCb);
+  const onPauseRef = useRef(onPauseCb);
+  const onSeekedRef = useRef(onSeekedCb);
+  const onEndedRef = useRef(onEndedCb);
+  // What the next load starts with (start time, languages, bitrate, thumbnails).
+  const loadPrefsRef = useRef(options);
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdateCb;
+    onPauseRef.current = onPauseCb;
+    onSeekedRef.current = onSeekedCb;
+    onEndedRef.current = onEndedCb;
+    loadPrefsRef.current = options;
+  });
   useEffect(() => {
     onReadyRef.current = onReady;
     onErrorRef.current = onError;
@@ -255,7 +293,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || deferLoad) return;
 
     let cancelled = false;
     setLimitError(null);
@@ -267,6 +305,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setActiveSignal(null);
     setEnded(false);
     setHasClosingCredits(false);
+    thumbnailsTrackRef.current = null;
+    setHasThumbnails(false);
+    // Read once per load, so changing them doesn't restart what plays.
+    const prefs = loadPrefsRef.current;
+    const startTime = prefs.startTime && prefs.startTime > 0 ? prefs.startTime : null;
 
     // Client-side ads through Shaka's ad manager and IMA. The SDK starts loading now, alongside the licence and
     // manifest, so a pre-roll is usually ready by the time the content is.
@@ -449,6 +492,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       seeking = false;
       lastTime = video.currentTime;
       updateSignal();
+      if (!cancelled && !adPlayingRef.current) onSeekedRef.current?.(video.currentTime);
     };
     const endAds = () => {
       if (breakTimer) clearTimeout(breakTimer);
@@ -490,6 +534,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       checkAdBreak();
       updateCountdown();
       updateSignal();
+      if (!adPlayingRef.current) onTimeUpdateRef.current?.(video.currentTime, Number.isFinite(video.duration) ? video.duration : 0);
     };
     const onAddTrack = () => { if (!cancelled) bindCueTrack(); };
     const onDuration = () => {
@@ -505,9 +550,13 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       if (cancelled) return;
       setPlaying(false);
       updateCountdown();
+      // The content pauses under an ad, and at its end: neither is the viewer pausing.
+      if (!adPlayingRef.current && !video.ended) onPauseRef.current?.(video.currentTime);
     };
     const onEnded = () => {
-      if (!cancelled) setEnded(true);
+      if (cancelled) return;
+      setEnded(true);
+      if (!adPlayingRef.current) onEndedRef.current?.();
     };
     const onVolumeChange = () => {
       if (cancelled) return;
@@ -554,6 +603,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         return;
       }
       playerRef.current = player;
+
+      const restrictions = bitrateRestrictions(prefs.maxBitrate);
+      if (restrictions) player.configure({ restrictions });
+      const audio = audioPreference(prefs.preferredAudioLanguage);
+      if (audio) player.configure({ preferredAudio: [audio] });
 
       player.addEventListener("error", (event: Event) => {
         if (cancelled) return;
@@ -669,12 +723,31 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       }
 
       try {
-        await player.load(streamManifestUrl(streamId));
+        await player.load(streamManifestUrl(streamId), startTime);
         if (cancelled) return;
+        const subtitleLanguage = prefs.preferredSubtitleLanguage;
+        if (subtitleLanguage) {
+          const track = player.getTextTracks().find((t) => matchesLanguage(t.language, subtitleLanguage));
+          if (track) {
+            player.selectTextTrack(track);
+            setTimeout(bindCueTrack, 0);
+          }
+        }
         setState("ready");
         setErrorMsg(null);
         collector?.markReady();
         refreshTracks();
+        // A missing or broken thumbnails track only leaves the seek bar without previews.
+        if (prefs.thumbnailsUrl && player.addThumbnailsTrack) {
+          player
+            .addThumbnailsTrack(prefs.thumbnailsUrl, "text/vtt")
+            .then((track) => {
+              if (cancelled) return;
+              thumbnailsTrackRef.current = track.id;
+              setHasThumbnails(true);
+            })
+            .catch(() => {});
+        }
         onReadyRef.current?.();
         // Before the first play: Shaka starts the ad manager on the content's play event, so a pre-roll comes first.
         await requestAds(player);
@@ -726,7 +799,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) destroyingRef.current = p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
+  }, [streamId, deferLoad, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
@@ -778,6 +851,16 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setActiveTextTrack(null);
     unbindCueTrack();
   }, [unbindCueTrack]);
+  const getThumbnail = useCallback(async (time: number) => {
+    const p = playerRef.current;
+    const trackId = thumbnailsTrackRef.current;
+    if (!p?.getThumbnails || trackId === null) return null;
+    try {
+      return await p.getThumbnails(trackId, time);
+    } catch {
+      return null;
+    }
+  }, []);
   const toggleCaptions = useCallback(() => {
     if (captionsVisible) {
       disableCaptions();
@@ -823,6 +906,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     selectTextTrack,
     disableCaptions,
     toggleCaptions,
+    getThumbnail,
+    hasThumbnails,
   };
 }
 

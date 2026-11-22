@@ -33,7 +33,7 @@ export type ShakaNetworkingEngine = {
 export type ShakaPlayerApi = {
   configure: (config: unknown) => void;
   attach: (video: HTMLVideoElement) => Promise<void>;
-  load: (uri: string) => Promise<void>;
+  load: (uri: string, startTime?: number | null) => Promise<void>;
   unload: () => Promise<void>;
   destroy: () => Promise<void>;
   addEventListener: (event: string, fn: (e: Event) => void) => void;
@@ -47,8 +47,24 @@ export type ShakaPlayerApi = {
   isLive?: () => boolean;
   /** The key system in use once a licence was asked for (e.g. "com.widevine.alpha"). */
   drmInfo?: () => { keySystem?: string } | null;
+  /** Adds a thumbnails track (e.g. WebVTT sprites) next to the manifest's. Resolves with its track. */
+  addThumbnailsTrack?: (uri: string, mimeType?: string) => Promise<{ id: number }>;
+  getThumbnails?: (trackId: number | null, time: number) => Promise<ShakaThumbnail | null>;
   /** Null in builds without the ads module. */
   getAdManager?: () => ShakaAdManager | null;
+};
+
+/** A seek bar preview (shaka.extern.Thumbnail): one tile of `uris[0]`, at positionX/positionY, width × height. */
+export type ShakaThumbnail = {
+  uris: string[];
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  imageWidth: number;
+  imageHeight: number;
+  startTime: number;
+  duration: number;
 };
 
 /** The ad playing now (shaka.extern.IAd), the part the player reads. */

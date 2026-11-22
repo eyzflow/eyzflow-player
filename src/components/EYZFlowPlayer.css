@@ -14,6 +14,7 @@
 
   position: relative;
   width: 100%;
+  container: eyz-player / inline-size;
   aspect-ratio: 16 / 9;
   background: var(--eyz-bg);
   border-radius: var(--eyz-border-radius);
@@ -495,6 +496,21 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+/* Phone width: the volume slider (phones use their buttons), quality menu and picture in picture make way, so
+   subtitles, cast and fullscreen stay on screen. */
+@container eyz-player (max-width: 520px) {
+  .eyz-controls .eyz-volume-slider,
+  .eyz-controls .eyz-quality:not(.eyz-captions),
+  .eyz-controls .eyz-btn--pip {
+    display: none;
+  }
+
+  .eyz-controls {
+    padding-inline: 8px;
+  }
 }
 
 /* ── Buttons ── */
@@ -588,6 +604,34 @@
 
 .eyz-seekbar-wrap:hover .eyz-seekbar-track {
   height: 6px;
+}
+
+/* Seek bar preview: the thumbnail at the pointer, above the bar. */
+.eyz-seek-preview {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.eyz-seek-preview__image {
+  background-color: #000;
+  background-repeat: no-repeat;
+  border: 2px solid var(--eyz-text);
+  border-radius: calc(var(--eyz-border-radius) / 2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.eyz-seek-preview__time {
+  color: var(--eyz-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 /* ── Volume ── */

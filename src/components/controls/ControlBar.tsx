@@ -2,6 +2,7 @@ import type { ShakaTrack, ShakaTextTrack } from "../../lib/shaka-types";
 import type { PlayerCastConfig, PlayerFeatures } from "../../lib/config-types";
 import { PlayPauseButton } from "./PlayPauseButton";
 import { SeekBar } from "./SeekBar";
+import type { ShakaThumbnail } from "../../lib/shaka-types";
 import { TimeDisplay } from "./TimeDisplay";
 import { VolumeControl } from "./VolumeControl";
 import { QualitySelector } from "./QualitySelector";
@@ -35,6 +36,8 @@ type Props = {
   onSelectTrack: (t: ShakaTrack) => void;
   onSelectTextTrack: (t: ShakaTextTrack) => void;
   onCaptionsOff: () => void;
+  /** The seek bar preview at a time; absent without a thumbnails track. */
+  getThumbnail?: (time: number) => Promise<ShakaThumbnail | null>;
 };
 
 export function ControlBar({
@@ -46,10 +49,11 @@ export function ControlBar({
   onPlay, onPause, onSeek,
   onVolume, onMute,
   onSelectTrack, onSelectTextTrack, onCaptionsOff,
+  getThumbnail,
 }: Props) {
   return (
     <div className="eyz-controls">
-      <SeekBar currentTime={currentTime} duration={duration} buffered={buffered} onSeek={onSeek} />
+      <SeekBar currentTime={currentTime} duration={duration} buffered={buffered} onSeek={onSeek} getThumbnail={getThumbnail} />
       <div className="eyz-controls-row">
         <div className="eyz-controls-left">
           <PlayPauseButton playing={playing} onClick={playing ? onPause : onPlay} />

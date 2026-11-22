@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0
+
+- Start position (EYF-227): `startTime` starts the stream at a point, e.g. to resume where the viewer left off.
+- Languages (EYF-227): `preferredAudioLanguage` picks the audio and `preferredSubtitleLanguage` shows subtitles from
+  the start when the stream has them. Region and two- or three-letter codes don't matter (`de`, `de-DE`, `deu`).
+- Quality cap (EYF-227): `maxBitrate`, or `maxBitrate` in the player config, caps the bitrate the player picks.
+- Seek bar thumbnails (EYF-227): hovering or dragging the seek bar shows the frame there, from the stream's
+  `thumbnails/thumbnail.vtt` or a track the app names with `thumbnails`. `features.thumbnails: false` turns them off.
+- Playback callbacks (EYF-227): `onTimeUpdate`, `onPause`, `onSeeked` and `onEnded`, for watch progress and
+  "Continue watching" in the app. None fire during an ad.
+- Fix: with a `configId`, the stream never loaded (the player waited for the config without a video element and did not
+  try again once it had one). It now loads once the config is in.
+- Phone width: below 520px the volume slider, quality menu and picture-in-picture button make way, so subtitles, cast
+  and fullscreen stay on screen (they ran off the edge).
+- Removed the deprecated `EyzflowPlayer`, `EyzflowPlayerProps` and `EyzflowPlayerAnalyticsOptions` names (renamed in
+  0.4.0); use `EYZFlowPlayer`, `EYZFlowPlayerProps` and `EYZFlowPlayerAnalyticsOptions`.
+
 ## 0.4.0
 
 - Renamed (EYF-225): `EyzflowPlayer`, `EyzflowPlayerProps` and `EyzflowPlayerAnalyticsOptions` are now
