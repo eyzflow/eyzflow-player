@@ -1,3 +1,6 @@
+import type { PlayerEndScreenConfig } from "./end-screen";
+import type { SkipButtonTypes } from "./stream-signals";
+
 export type PlayerTheme = {
   accentColor: string;
   backgroundColor: string;
@@ -22,6 +25,8 @@ export type PlayerFeatures = {
   adCountdown?: boolean;
   /** "Skip intro", "Skip recap" and "Skip credits" buttons at the stream's signals. Missing (older configs): on. */
   skipButtons?: boolean;
+  /** The end screen (up next and similar films) when the app passes items. Missing (older configs): on. */
+  endScreen?: boolean;
 };
 
 export type PlayerCastConfig = {
@@ -49,6 +54,10 @@ export type PlayerConfig = {
   cast?: PlayerCastConfig;
   ads?: PlayerAdsConfig;
   drm?: PlayerDrmConfig;
+  /** How the end screen behaves (`features.endScreen`). */
+  endScreen?: PlayerEndScreenConfig;
+  /** Which signals get a skip button (`features.skipButtons`). Missing: intro, recap and opening credits. */
+  skipButtonTypes?: SkipButtonTypes;
 };
 
 export const DEFAULT_THEME: PlayerTheme = {
@@ -73,6 +82,7 @@ export const DEFAULT_FEATURES: PlayerFeatures = {
   autoHideControls: true,
   adCountdown: true,
   skipButtons: true,
+  endScreen: true,
 };
 
 export const DEFAULT_CONFIG: PlayerConfig = {

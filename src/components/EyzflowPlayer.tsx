@@ -5,7 +5,10 @@ import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { adCountdownLabel } from "../lib/ad-countdown";
-import { skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
+import { skipButtonFor, skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
+import { overlayMoment, type SignalOverlayContext } from "../lib/signal-overlay";
+import { endScreenLabels, endScreenPhase, endScreenSettings, type EndScreenItem, type EndScreenOptions } from "../lib/end-screen";
+import { EndScreen } from "./EndScreen";
 import { PlayerOverlay } from "./PlayerOverlay";
 import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
@@ -21,6 +24,10 @@ function mergeConfig(
     features: { ...base.features, ...patch?.features },
     cast: patch?.cast ?? base.cast,
     ads: patch?.ads ?? base.ads,
+    endScreen: patch?.endScreen ? { ...base.endScreen, ...patch.endScreen } : base.endScreen,
+    skipButtonTypes: patch?.skipButtonTypes
+      ? { ...base.skipButtonTypes, ...patch.skipButtonTypes }
+      : base.skipButtonTypes,
     drm: patch?.drm
       ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
       : base.drm,
@@ -69,6 +76,19 @@ export type EyzflowPlayerProps = {
    * For example, offer the next episode when `closing_credits` starts.
    */
   onSignal?: (signal: StreamSignal | null) => void;
+  /**
+   * The app's own UI over the player while playback is in a signal (e.g. three similar films at the closing credits)
+   * or after the film ended. Return null to show nothing. It is drawn inside the player, so it stays in fullscreen,
+   * above the video and subtitles and below the control bar; the skip button hides while it shows. Not during an ad.
+   */
+  renderOverlay?: (context: SignalOverlayContext) => React.ReactNode;
+  /**
+   * The built-in end screen: "Up next" with a countdown and a row of films the app passes, over the closing credits
+   * (shrunk into a corner) or after the film. A picked film plays in place; `onSelect` hears it and can prevent it.
+   * The config's `features.endScreen` and `endScreen` settings apply where this leaves them out. `renderOverlay`
+   * wins when it returns something.
+   */
+  endScreen?: EndScreenOptions;
   onError?: (msg: string) => void;
   onReady?: () => void;
 };
@@ -89,6 +109,8 @@ export function EyzflowPlayer({
   controls: controlsProp,
   fill = false,
   onSignal,
+  renderOverlay,
+  endScreen,
   onError,
   onReady,
 }: EyzflowPlayerProps) {
@@ -134,8 +156,12 @@ export function EyzflowPlayer({
     [drmParametersKey],
   );
 
+  // A stream the end screen picked plays in place, until the app passes another `streamId`.
+  const [picked, setPicked] = useState<{ from: string; streamId: string } | null>(null);
+  const playingStreamId = picked?.from === streamId ? picked.streamId : streamId;
+
   const shaka = useShaka({
-    streamId,
+    streamId: playingStreamId,
     isProtected: resolved.isProtected,
     drmAuthorizationKey,
     drmParameters,
@@ -145,7 +171,8 @@ export function EyzflowPlayer({
     analytics: analyticsProp !== false,
     cmcd: typeof analyticsProp === "object" && analyticsProp.cmcd === true,
     onLicenseError,
-    autoPlay: resolved.autoPlay,
+    // A picked stream starts at once, whatever the config says.
+    autoPlay: resolved.autoPlay || playingStreamId !== streamId,
     muted: config.features.muted,
     loop: config.features.loop,
     // Both the Ads switch and a tag are needed: the switch turns ads off without losing the tag.
@@ -158,8 +185,60 @@ export function EyzflowPlayer({
     onLimitReached,
   });
 
-  const { activeSignal, skipSignal, adPlaying, state } = shaka;
-  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready";
+  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause, playing, currentTime, duration, hasClosingCredits } =
+    shaka;
+
+  // The app's overlay: asked for at a signal or after the end, until dismissed for that moment.
+  const moment = overlayMoment(activeSignal, ended);
+  const momentKey = moment && `${playingStreamId}:${moment}`;
+  const [dismissedMoment, setDismissedMoment] = useState<string | null>(null);
+  const overlay =
+    renderOverlay && momentKey && momentKey !== dismissedMoment && !adPlaying && state === "ready"
+      ? renderOverlay({
+          signal: activeSignal,
+          ended,
+          controls: { skip: skipSignal, seek, play, pause, dismiss: () => setDismissedMoment(momentKey) },
+        })
+      : null;
+  const overlayShown = overlay !== null && overlay !== undefined && overlay !== false;
+
+  // The built-in end screen, when the app's own overlay shows nothing.
+  // The last second counts as the end: credits that run to the end leave their signal a moment before `ended`.
+  const endSettings = endScreenSettings(config, endScreen);
+  const nearEnd = duration > 0 && currentTime >= duration - 1;
+  const endShownPhase =
+    endScreen && !overlayShown && !adPlaying && state === "ready"
+      ? endScreenPhase(endSettings, {
+          signal: activeSignal,
+          ended: ended || nearEnd,
+          position: currentTime,
+          duration,
+          hasClosingCredits,
+        })
+      : null;
+  const endMomentKey = endShownPhase && `${playingStreamId}:${endShownPhase}`;
+  const [dismissedEndMoment, setDismissedEndMoment] = useState<string | null>(null);
+  const endPhase = endShownPhase && endMomentKey !== dismissedEndMoment ? endShownPhase : null;
+  const shrunk = endPhase === "credits" && endSettings.shrinkVideo;
+  const dismissMoment = useCallback(() => {
+    if (endMomentKey) setDismissedEndMoment(endMomentKey);
+  }, [endMomentKey]);
+  const selectEndItem = (item: EndScreenItem, autoplay: boolean) => {
+    let prevented = false;
+    endScreen?.onSelect?.(item, { autoplay, preventDefault: () => { prevented = true; } });
+    if (!prevented) setPicked({ from: streamId, streamId: item.streamId });
+  };
+  // Esc goes back to the credits, as clicking the shrunk video does.
+  useEffect(() => {
+    if (!endPhase) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") dismissMoment();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [endPhase, dismissMoment]);
+
+  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown && !endPhase;
 
   // Auto-hide controls after 3s of pointer inactivity, but only while playing.
   const [hiding, setHiding] = useState(false);
@@ -205,7 +284,7 @@ export function EyzflowPlayer({
 
   return (
     <div
-      className={`eyz-player${fill ? " eyz-player--fill" : ""}${hiding ? " eyz-player--hide-controls" : ""}`}
+      className={`eyz-player${fill ? " eyz-player--fill" : ""}${hiding ? " eyz-player--hide-controls" : ""}${shrunk ? " eyz-player--credits-shrunk" : ""}`}
       style={cssVars}
       ref={containerRef}
       onMouseMove={resetHideTimer}
@@ -218,9 +297,11 @@ export function EyzflowPlayer({
         className="eyz-video"
         playsInline
         muted={config.features.muted}
+        onClick={shrunk ? dismissMoment : undefined}
+        title={shrunk ? endScreenBackLabel : undefined}
       />
       <div ref={shaka.adContainerRef} className="eyz-ad-container" />
-      {shaka.activeCueLines.length > 0 && !shaka.adPlaying && (
+      {shaka.activeCueLines.length > 0 && !shaka.adPlaying && !shrunk && (
         <div className="eyz-text-layer" aria-live="off">
           <div className="eyz-cue">
             {shaka.activeCueLines.map((line, i) => (
@@ -231,10 +312,25 @@ export function EyzflowPlayer({
           </div>
         </div>
       )}
-      {showSkip && activeSignal && (
+      {showSkip && activeSignal && skipButtonFor(activeSignal.type, config.skipButtonTypes) && (
         <button type="button" key={activeSignal.id} className="eyz-skip-signal" onClick={skipSignal}>
           {skipSignalLabel(activeSignal.type)}
         </button>
+      )}
+      {overlayShown && <div className="eyz-signal-overlay">{overlay}</div>}
+      {endPhase && endScreen && (
+        <div className="eyz-signal-overlay eyz-signal-overlay--end-screen">
+          <EndScreen
+            // Per stream, not per moment: the countdown carries on when the credits run into the end of the film.
+            key={playingStreamId}
+            options={endScreen}
+            settings={endSettings}
+            phase={endPhase}
+            counting={playing || ended}
+            onSelect={selectEndItem}
+            onDismiss={dismissMoment}
+          />
+        </div>
       )}
       {shaka.adCountdown !== null && !shaka.adPlaying && (
         <div className="eyz-ad-countdown" role="status" aria-live="polite">
@@ -272,6 +368,8 @@ export function EyzflowPlayer({
     </div>
   );
 }
+
+const endScreenBackLabel = endScreenLabels().backToCredits;
 
 /** Lighten an accent hex color slightly for hover state */
 function adjustAccent(hex: string): string {

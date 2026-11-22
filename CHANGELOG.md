@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Skip intro, recap and credits (EYF-213): while playback is in one of the stream's signals (Stream → Signals in the
+  dashboard), a "Skip intro", "Skip recap" or "Skip credits" button over the video seeks to its end. It takes the
+  config's theme; text in en, de, fr and nl. `features.skipButtons: false` hides it. `onSignal` reports entering and
+  leaving a signal.
+- `skipButtonTypes` (EYF-223): the skip button per signal type, from the player config or inline. By default intro,
+  recap and opening credits; no "Skip credits" over the closing credits unless `closingCredits: true`.
+- `renderOverlay` (EYF-218): the app's own UI inside the player at a signal or after the end, e.g. similar films at
+  the closing credits. It stays in fullscreen, sits under the control bar, hides during ads, and gets `skip`, `seek`,
+  `play`, `pause` and `dismiss`.
+- `endScreen` (EYF-220): a Netflix-style end screen from the films the app passes. At the closing credits the video
+  shrinks into a corner, "Up next" counts down and plays the next stream, and a picked film plays in place
+  (`onSelect`, which can prevent it). Customizable through the theme, `eyz-end-screen…` classes, `className`, `title`
+  and `renderItem`. The player config's `features.endScreen` and `endScreen` settings apply. Texts in en, de, fr, nl.
+  A stream without a closing credits signal gets it `secondsBeforeEnd` seconds before the end (default 20).
+- A new `streamId` now waits for the previous Shaka player's teardown before loading; switching streams could hang
+  before.
+
 ## 0.2.0
 
 - Playback sessions for a plan's stream and device limits: with `storefrontId`
