@@ -17,5 +17,6 @@
     "noUnusedParameters": false,
     "strict": true
   },
-  "include": ["src/index.ts", "src/components", "src/lib"]
+  "include": ["src/index.ts", "src/components", "src/lib"],
+  "exclude": ["src/**/*.test.ts"]
 }

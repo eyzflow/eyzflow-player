@@ -2,7 +2,7 @@
   "name": "eyzflow-player",
   "version": "0.1.0",
   "type": "module",
-  "description": "EyzFlow video player — Shaka-powered, DRM-enabled, custom branded",
+  "description": "EyzFlow video player \u2014 Shaka-powered, DRM-enabled, custom branded",
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
@@ -22,7 +22,8 @@
     "build": "tsc -b && vite build",
     "build:lib": "vite build --config vite.config.lib.ts && tsc -p tsconfig.lib.json",
     "lint": "eslint .",
-    "preview": "vite preview --outDir dist-app"
+    "preview": "vite preview --outDir dist-app",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -46,6 +47,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^6.4.3",
-    "vite-plugin-dts": "^5.0.2"
+    "vite-plugin-dts": "^5.0.2",
+    "vitest": "^3.2.7"
   }
 }

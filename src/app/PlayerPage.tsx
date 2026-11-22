@@ -6,6 +6,8 @@ export function PlayerPage() {
   const configId = params.get("configId") ?? undefined;
   const drmKey = params.get("drmKey") ?? undefined;
   const storefrontId = params.get("storefrontId") ?? undefined;
+  const playerKey = params.get("playerKey") ?? undefined;
+  const analytics = params.get("analytics") !== "false";
   const autoPlay = params.get("autoPlay") !== "false";
 
   if (!streamId) {
@@ -31,6 +33,8 @@ export function PlayerPage() {
     <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
       <EyzflowPlayer
         streamId={streamId}
+        playerKey={playerKey}
+        analytics={analytics}
         configId={configId}
         drmAuthorizationKey={drmKey}
         storefrontId={storefrontId}
