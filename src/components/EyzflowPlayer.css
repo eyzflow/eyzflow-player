@@ -73,6 +73,40 @@
   user-select: none;
 }
 
+/* ── Skip intro / recap / credits: shown while playback is in one of the stream's signals, whether or not the
+   controls are. Sits where the countdown does; a countdown at the same time moves above it. ── */
+.eyz-skip-signal {
+  position: absolute;
+  right: 16px;
+  bottom: 72px;
+  z-index: 16;
+  padding: 9px 18px;
+  /* Colors from the player config's theme: the control bar's background and text, the accent on hover. */
+  border: 1px solid color-mix(in srgb, var(--eyz-text) 55%, transparent);
+  border-radius: calc(var(--eyz-border-radius, 10px) * 0.6);
+  background: var(--eyz-bar);
+  color: var(--eyz-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--eyz-transition), border-color var(--eyz-transition);
+}
+
+.eyz-skip-signal:hover {
+  background: var(--eyz-accent);
+  border-color: var(--eyz-accent);
+}
+
+.eyz-skip-signal:focus-visible {
+  outline: 2px solid var(--eyz-accent-hover);
+  outline-offset: 2px;
+}
+
+.eyz-skip-signal ~ .eyz-ad-countdown {
+  bottom: 120px;
+}
+
 /* ── Overlay (loading / error) ── */
 .eyz-overlay {
   position: absolute;
