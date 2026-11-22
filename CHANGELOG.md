@@ -6,6 +6,8 @@
   dashboard), a "Skip intro", "Skip recap" or "Skip credits" button over the video seeks to its end. It takes the
   config's theme; text in en, de, fr and nl. `features.skipButtons: false` hides it. `onSignal` reports entering and
   leaving a signal.
+- `skipButtonTypes` (EYF-223): the skip button per signal type, from the player config or inline. By default intro,
+  recap and opening credits; no "Skip credits" over the closing credits unless `closingCredits: true`.
 - `renderOverlay` (EYF-218): the app's own UI inside the player at a signal or after the end, e.g. similar films at
   the closing credits. It stays in fullscreen, sits under the control bar, hides during ads, and gets `skip`, `seek`,
   `play`, `pause` and `dismiss`.

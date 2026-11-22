@@ -10,7 +10,7 @@ export type {
 } from "./lib/config-types";
 export type { PlaybackLimitCode, PlaybackLimitError } from "./lib/playback-session";
 export type { PlayerLicenseCode, PlayerLicenseError } from "./lib/license";
-export type { StreamSignal, StreamSignalType } from "./lib/stream-signals";
+export type { SkipButtonTypes, StreamSignal, StreamSignalType } from "./lib/stream-signals";
 export type { SignalOverlayContext, SignalOverlayControls } from "./lib/signal-overlay";
 export type {
   EndScreenItem,

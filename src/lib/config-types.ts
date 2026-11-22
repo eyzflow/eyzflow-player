@@ -1,4 +1,5 @@
 import type { PlayerEndScreenConfig } from "./end-screen";
+import type { SkipButtonTypes } from "./stream-signals";
 
 export type PlayerTheme = {
   accentColor: string;
@@ -55,6 +56,8 @@ export type PlayerConfig = {
   drm?: PlayerDrmConfig;
   /** How the end screen behaves (`features.endScreen`). */
   endScreen?: PlayerEndScreenConfig;
+  /** Which signals get a skip button (`features.skipButtons`). Missing: intro, recap and opening credits. */
+  skipButtonTypes?: SkipButtonTypes;
 };
 
 export const DEFAULT_THEME: PlayerTheme = {

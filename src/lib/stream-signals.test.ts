@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIGNAL_SCHEME, SignalSchedule, signalFromRegion, skipSignalLabel } from "./stream-signals";
+import { SIGNAL_SCHEME, SignalSchedule, signalFromRegion, skipButtonFor, skipSignalLabel } from "./stream-signals";
 
 const region = (id: string, start: number, end: number, messageData?: string, scheme = SIGNAL_SCHEME) => ({
   schemeIdUri: scheme,
@@ -68,5 +68,21 @@ describe("skipSignalLabel", () => {
     expect(skipSignalLabel("recap", "fr")).toBe("Passer le récap");
     expect(skipSignalLabel("opening_credits", "nl-BE")).toBe("Begintiteling overslaan");
     expect(skipSignalLabel("intro", "ja")).toBe("Skip intro");
+  });
+});
+
+describe("skipButtonFor", () => {
+  it("defaults to intro, recap and opening credits, not closing credits", () => {
+    expect(skipButtonFor("intro")).toBe(true);
+    expect(skipButtonFor("recap")).toBe(true);
+    expect(skipButtonFor("opening_credits")).toBe(true);
+    expect(skipButtonFor("closing_credits")).toBe(false);
+  });
+
+  it("follows the config's section, the defaults for types it leaves out", () => {
+    const types = { recap: false, closingCredits: true };
+    expect(skipButtonFor("recap", types)).toBe(false);
+    expect(skipButtonFor("closing_credits", types)).toBe(true);
+    expect(skipButtonFor("intro", types)).toBe(true);
   });
 });

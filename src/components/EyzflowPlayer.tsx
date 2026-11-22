@@ -5,7 +5,7 @@ import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { adCountdownLabel } from "../lib/ad-countdown";
-import { skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
+import { skipButtonFor, skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
 import { overlayMoment, type SignalOverlayContext } from "../lib/signal-overlay";
 import { endScreenLabels, endScreenPhase, endScreenSettings, type EndScreenItem, type EndScreenOptions } from "../lib/end-screen";
 import { EndScreen } from "./EndScreen";
@@ -25,6 +25,9 @@ function mergeConfig(
     cast: patch?.cast ?? base.cast,
     ads: patch?.ads ?? base.ads,
     endScreen: patch?.endScreen ? { ...base.endScreen, ...patch.endScreen } : base.endScreen,
+    skipButtonTypes: patch?.skipButtonTypes
+      ? { ...base.skipButtonTypes, ...patch.skipButtonTypes }
+      : base.skipButtonTypes,
     drm: patch?.drm
       ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
       : base.drm,
@@ -309,7 +312,7 @@ export function EyzflowPlayer({
           </div>
         </div>
       )}
-      {showSkip && activeSignal && (
+      {showSkip && activeSignal && skipButtonFor(activeSignal.type, config.skipButtonTypes) && (
         <button type="button" key={activeSignal.id} className="eyz-skip-signal" onClick={skipSignal}>
           {skipSignalLabel(activeSignal.type)}
         </button>

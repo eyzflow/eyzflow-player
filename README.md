@@ -67,6 +67,7 @@ With `features.ads` on and an `ads.adTagUrl` in the player config, the player pl
 The intro, recap, opening and closing credits marked on a stream in the dashboard (Stream → Signals) come in the stream's manifest. While playback is in one, the player shows "Skip intro", "Skip recap" or "Skip credits" over the video; it seeks to the signal's end. The button takes the config's theme (bar colour, text colour, accent on hover, radius), and its text is in English, German, French or Dutch.
 
 - `features.skipButtons: false` hides the button. The signal is still reported to `onSignal`.
+- `skipButtonTypes` picks the types with a button: `{ intro, recap, openingCredits, closingCredits }`, by default all but `closingCredits` (skipping the closing credits only ends the film; the end screen belongs there). Missing types keep the default.
 - `onSignal` gets `{ id, type, start, end, label }` when playback enters a signal (`type` is `intro`, `recap`, `opening_credits` or `closing_credits`), and `null` when it leaves.
 
 ## End screen

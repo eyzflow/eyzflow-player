@@ -113,6 +113,38 @@ const LABELS: Record<string, Record<StreamSignalType, string>> = {
   },
 };
 
+/** Which signals get a skip button: the player config's `skipButtonTypes`. Missing types use the defaults. */
+export type SkipButtonTypes = {
+  intro?: boolean;
+  recap?: boolean;
+  openingCredits?: boolean;
+  closingCredits?: boolean;
+};
+
+/**
+ * The defaults: intro, recap and opening credits on; closing credits off (skipping them only ends the film, and the
+ * end screen belongs there).
+ */
+export const DEFAULT_SKIP_BUTTON_TYPES: Required<SkipButtonTypes> = {
+  intro: true,
+  recap: true,
+  openingCredits: true,
+  closingCredits: false,
+};
+
+const SKIP_TYPE_KEY: Record<StreamSignalType, keyof SkipButtonTypes> = {
+  intro: "intro",
+  recap: "recap",
+  opening_credits: "openingCredits",
+  closing_credits: "closingCredits",
+};
+
+/** Whether `type` gets a skip button under `types` (the config's section, maybe partial or missing). */
+export function skipButtonFor(type: StreamSignalType, types?: SkipButtonTypes): boolean {
+  const key = SKIP_TYPE_KEY[type];
+  return types?.[key] ?? DEFAULT_SKIP_BUTTON_TYPES[key];
+}
+
 /** The skip button's text in the viewer's language (en, de, fr, nl; English otherwise). */
 export function skipSignalLabel(type: StreamSignalType, language?: string): string {
   const lang = (language ?? (typeof navigator !== "undefined" ? navigator.language : "en")).toLowerCase().split("-")[0];
