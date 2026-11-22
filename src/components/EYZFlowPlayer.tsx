@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./EyzflowPlayer.css";
+import "./EYZFlowPlayer.css";
 import { useShaka } from "../lib/use-shaka";
 import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
@@ -34,12 +34,12 @@ function mergeConfig(
   };
 }
 
-export type EyzflowPlayerAnalyticsOptions = {
+export type EYZFlowPlayerAnalyticsOptions = {
   /** Add CMCD data (with the analytics impression id) to manifest and segment requests, so CDN logs can be joined. */
   cmcd?: boolean;
 };
 
-export type EyzflowPlayerProps = {
+export type EYZFlowPlayerProps = {
   streamId: string;
   /**
    * The organisation's player key (pk_…, from the dashboard: Player → Keys). The player checks it for this site before
@@ -47,7 +47,7 @@ export type EyzflowPlayerProps = {
    */
   playerKey?: string;
   /** Playback quality analytics, with a player key. `false` turns them off for this player. Default on. */
-  analytics?: boolean | EyzflowPlayerAnalyticsOptions;
+  analytics?: boolean | EYZFlowPlayerAnalyticsOptions;
   /** The player key check refused this site or key (the player shows an error instead of the video). */
   onLicenseError?: (error: PlayerLicenseError) => void;
   /** Fetch remote config by ID from the eyzflow API */
@@ -93,7 +93,7 @@ export type EyzflowPlayerProps = {
   onReady?: () => void;
 };
 
-export function EyzflowPlayer({
+export function EYZFlowPlayer({
   streamId,
   playerKey,
   analytics: analyticsProp,
@@ -113,7 +113,7 @@ export function EyzflowPlayer({
   endScreen,
   onError,
   onReady,
-}: EyzflowPlayerProps) {
+}: EYZFlowPlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [remoteConfig, setRemoteConfig] = useState<PlayerConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(!!configId);

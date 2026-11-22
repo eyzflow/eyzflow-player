@@ -439,7 +439,7 @@
 }
 
 /* Controls re-show on any activity (mouse, touch, focus, keys) via the
-   idle timer in EyzflowPlayer. No :hover/:focus CSS override: a fullscreen
+   idle timer in EYZFlowPlayer. No :hover/:focus CSS override: a fullscreen
    player is always hovered, and Chrome keeps a mouse-focused <select> in
    :focus-visible — either rule would pin the controls forever. */
 

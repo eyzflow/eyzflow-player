@@ -1,4 +1,4 @@
-import { EyzflowPlayer } from "../components/EyzflowPlayer";
+import { EYZFlowPlayer } from "../components/EYZFlowPlayer";
 import { DEFAULT_FEATURES, type PlayerConfig } from "../lib/config-types";
 import type { SignalOverlayContext } from "../lib/signal-overlay";
 import type { EndScreenOptions } from "../lib/end-screen";
@@ -43,7 +43,7 @@ export function PlayerPage() {
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
-      <EyzflowPlayer
+      <EYZFlowPlayer
         streamId={streamId}
         playerKey={playerKey}
         analytics={analytics}
