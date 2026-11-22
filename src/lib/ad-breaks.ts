@@ -85,6 +85,13 @@ export class AdBreakSchedule {
     return reached;
   }
 
+  /** Starts of the mid-roll breaks not played yet, in order (for the countdown before them). */
+  upcomingStarts(): number[] {
+    return this.ordered()
+      .filter((b) => b.start > PREROLL_WINDOW_S && !this.played.has(b.id))
+      .map((b) => b.start);
+  }
+
   private ordered(): AdBreak[] {
     return [...this.breaks.values()].sort((a, b) => a.start - b.start);
   }

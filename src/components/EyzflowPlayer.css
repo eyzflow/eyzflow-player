@@ -56,6 +56,23 @@
   pointer-events: auto;
 }
 
+/* ── Countdown before a mid-roll ("Ad in 5"): a corner notice that never takes clicks or focus ── */
+.eyz-ad-countdown {
+  position: absolute;
+  right: 16px;
+  bottom: 72px;
+  z-index: 15;
+  padding: 6px 12px;
+  border-radius: calc(var(--eyz-border-radius, 10px) * 0.6);
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ── Overlay (loading / error) ── */
 .eyz-overlay {
   position: absolute;

@@ -73,6 +73,8 @@ export const SHAKA_AD_EVENTS = {
   STOPPED: "ad-stopped",
   ALL_COMPLETED: "all-ads-completed",
   ERROR: "ad-error",
+  /** A VMAP tag loaded: its breaks as `cuepoints` ({ start }: 0 pre-roll, -1 post-roll). */
+  CUEPOINTS_CHANGED: "ad-cue-points-changed",
 } as const;
 
 /** google.ima.AdsRequest, the fields the player sets. */
