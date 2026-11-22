@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Skip intro, recap and credits (EYF-213): while playback is in one of the stream's signals (Stream → Signals in the
   dashboard), a "Skip intro", "Skip recap" or "Skip credits" button over the video seeks to its end. It takes the
