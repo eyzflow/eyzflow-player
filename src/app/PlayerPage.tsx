@@ -1,4 +1,5 @@
 import { EyzflowPlayer } from "../components/EyzflowPlayer";
+import { DEFAULT_FEATURES, type PlayerConfig } from "../lib/config-types";
 
 export function PlayerPage() {
   const params = new URLSearchParams(window.location.search);
@@ -9,6 +10,11 @@ export function PlayerPage() {
   const playerKey = params.get("playerKey") ?? undefined;
   const analytics = params.get("analytics") !== "false";
   const autoPlay = params.get("autoPlay") !== "false";
+  // For trying an ad tag without a remote config: turns ads on with this tag (replaces the config's features).
+  const adTag = params.get("adTag");
+  const config: Partial<PlayerConfig> | undefined = adTag
+    ? { features: { ...DEFAULT_FEATURES, ads: true }, ads: { adTagUrl: adTag } }
+    : undefined;
 
   if (!streamId) {
     return (
@@ -36,6 +42,7 @@ export function PlayerPage() {
         playerKey={playerKey}
         analytics={analytics}
         configId={configId}
+        config={config}
         drmAuthorizationKey={drmKey}
         storefrontId={storefrontId}
         autoPlay={autoPlay}

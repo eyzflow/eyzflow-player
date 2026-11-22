@@ -12,7 +12,9 @@ import {
   type PlaybackLimitCode,
   type PlaybackLimitError,
 } from "./playback-session";
-import type { ShakaError, ShakaPlayerApi, ShakaTrack, ShakaTextTrack } from "./shaka-types";
+import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
+import { loadIma } from "./ima-loader";
+import { AdBreakSchedule, type TimelineRegionLike } from "./ad-breaks";
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
 import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
@@ -37,6 +39,11 @@ export type UseShakaOptions = {
   analytics?: boolean;
   /** Add CMCD data (with the analytics impression id) to manifest and segment requests. Default false. */
   cmcd?: boolean;
+  /**
+   * A VAST/VMAP ad tag to play through Google IMA (client-side). Only pass it when the config's `features.ads` is on.
+   * Ads that cannot load (blocked, empty, timed out) are skipped and the content plays.
+   */
+  adTagUrl?: string;
   /** The player key check refused this site or key. */
   onLicenseError?: (error: PlayerLicenseError) => void;
   onReady?: () => void;
@@ -47,6 +54,10 @@ export type UseShakaOptions = {
 
 export type UseShakaReturn = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  /** The element IMA draws ads and their UI in: placed over the video, below the player's own overlays. */
+  adContainerRef: React.RefObject<HTMLDivElement | null>;
+  /** A linear ad is playing: the content is paused and its controls should be hidden. */
+  adPlaying: boolean;
   state: ShakaState;
   errorMsg: string | null;
   /** Set when playback was refused or stopped by a stream or device limit. */
@@ -78,10 +89,14 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, onLicenseError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, onLicenseError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const adContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<ShakaPlayerApi | null>(null);
+  const [adPlaying, setAdPlaying] = useState(false);
+  // Read by play/seek and the autoplay kick, which must not touch the content while an ad plays over it.
+  const adPlayingRef = useRef(false);
 
   const [state, setState] = useState<ShakaState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -208,6 +223,152 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     let cancelled = false;
     setLimitError(null);
     setLicenseError(null);
+    adPlayingRef.current = false;
+    setAdPlaying(false);
+
+    // Client-side ads through Shaka's ad manager and IMA. The SDK starts loading now, alongside the licence and
+    // manifest, so a pre-roll is usually ready by the time the content is.
+    const imaReady = adTagUrl ? loadIma().catch(() => null) : null;
+    let adManager: ShakaAdManager | null = null;
+    // The ad breaks marked on the stream (SCTE-35 events in the MPD). With any, ads play only at them.
+    const adBreaks = new AdBreakSchedule();
+    // A mid-roll holds the content at its marker until the ad starts, or until it turns out there is none.
+    let heldForBreak = false;
+    let breakTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastTime = 0;
+    let seeking = false;
+    const onAdStarted = (e: Event) => {
+      if (cancelled) return;
+      const ad = (e as Event & { ad?: ShakaAd }).ad ?? adManager?.getCurrentAd() ?? null;
+      if (ad && !ad.isLinear()) return; // an overlay: the content keeps playing under it
+      if (breakTimer) clearTimeout(breakTimer);
+      breakTimer = null;
+      adPlayingRef.current = true;
+      setAdPlaying(true);
+      collector?.beginAd();
+    };
+    const onAdStopped = () => {
+      if (breakTimer) clearTimeout(breakTimer);
+      breakTimer = null;
+      if (cancelled || !adPlayingRef.current) return;
+      adPlayingRef.current = false;
+      setAdPlaying(false);
+      collector?.endAd();
+      if (heldForBreak) {
+        heldForBreak = false;
+        // Shaka resumes the content after an ad it played; after an empty or failed tag nothing does.
+        if (video.paused && !video.ended) void video.play().catch(() => {});
+      }
+    };
+    // With markers on the stream, the markers decide where ads go. A VMAP tag brings its own schedule (mid-rolls at
+    // its own times, a post-roll); once the marker's break is over that schedule is dropped, so it never plays.
+    let endingSchedule = false;
+    const endTagSchedule = () => {
+      if (!adBreaks.hasBreaks || endingSchedule) return;
+      endingSchedule = true;
+      // Not from inside IMA's own event dispatch.
+      setTimeout(() => {
+        endingSchedule = false;
+        if (cancelled || adPlayingRef.current) return;
+        try {
+          adManager?.onAssetUnload();
+        } catch {
+          // Nothing left to release.
+        }
+      }, 0);
+    };
+    const onBreakOver = () => {
+      onAdStopped();
+      endTagSchedule();
+    };
+    const adListeners: Array<[string, (e: Event) => void]> = [
+      [SHAKA_AD_EVENTS.STARTED, onAdStarted],
+      [SHAKA_AD_EVENTS.STOPPED, onBreakOver],
+      [SHAKA_AD_EVENTS.ALL_COMPLETED, onBreakOver],
+      [SHAKA_AD_EVENTS.ERROR, onBreakOver],
+    ];
+    /** IMA and Shaka's ad manager, set up once per impression; null when ads cannot play here. */
+    const adsReady = async (player: ShakaPlayerApi) => {
+      if (!adTagUrl || !imaReady) return null;
+      const ima = await imaReady;
+      if (cancelled || !ima) return null;
+      if (adManager) return { ima, manager: adManager };
+      const container = adContainerRef.current;
+      const manager = player.getAdManager?.() ?? null;
+      if (!container || !manager) return null;
+      manager.setContainers(container, container);
+      for (const [event, fn] of adListeners) manager.addEventListener(event, fn);
+      adManager = manager;
+      return { ima, manager };
+    };
+    const sendAdRequest = (ready: NonNullable<Awaited<ReturnType<typeof adsReady>>>, willAutoPlay: boolean) => {
+      const request = new ready.ima.AdsRequest();
+      request.adTagUrl = adTagUrl!;
+      request.linearAdSlotWidth = video.clientWidth;
+      request.linearAdSlotHeight = video.clientHeight;
+      request.nonLinearAdSlotWidth = video.clientWidth;
+      request.nonLinearAdSlotHeight = Math.round(video.clientHeight / 3);
+      request.vastLoadTimeout = 5000;
+      request.setAdWillAutoPlay(willAutoPlay);
+      request.setAdWillPlayMuted(video.muted);
+      ready.manager.requestClientSideAds(request, null);
+    };
+    /**
+     * At load. Without ad markers on the stream, the tag decides (a VAST pre-roll, or a VMAP schedule). With markers,
+     * only a marker at the start gives a pre-roll; the others are mid-rolls, requested when playback reaches them.
+     */
+    const requestAds = async (player: ShakaPlayerApi) => {
+      if (adBreaks.hasBreaks && !adBreaks.takePreroll()) return;
+      try {
+        const ready = await adsReady(player);
+        if (!ready || isRemotePlayback(video)) return;
+        sendAdRequest(ready, !!autoPlay);
+      } catch {
+        // A broken tag or SDK: play the content without ads, no error for the viewer.
+        onAdStopped();
+      }
+    };
+    const playBreak = async (player: ShakaPlayerApi) => {
+      try {
+        const ready = await adsReady(player);
+        if (!ready || cancelled || isRemotePlayback(video) || adPlayingRef.current) return;
+        heldForBreak = true;
+        adPlayingRef.current = true;
+        setAdPlaying(true);
+        collector?.beginAd();
+        video.pause();
+        // The content already played: start the ad as soon as it loads instead of waiting for a play event.
+        player.configure({ ads: { skipPlayDetection: true } });
+        // IMA gives up on a VAST after 5 s and reports it; this only guards against it never answering.
+        breakTimer = setTimeout(onBreakOver, 12_000);
+        sendAdRequest(ready, true);
+      } catch {
+        onAdStopped();
+      }
+    };
+    const onRegionAdded = (e: Event) => {
+      const region = (e as CustomEvent<TimelineRegionLike>).detail;
+      if (region) adBreaks.addRegion(region);
+    };
+    const checkAdBreak = () => {
+      const now = video.currentTime;
+      const previous = lastTime;
+      lastTime = now;
+      const player = playerRef.current;
+      if (!adTagUrl || seeking || adPlayingRef.current || video.paused || !player) return;
+      if (adBreaks.due(previous, now)) void playBreak(player);
+    };
+    const onSeeking = () => { seeking = true; };
+    const onSeeked = () => {
+      seeking = false;
+      lastTime = video.currentTime;
+    };
+    const endAds = () => {
+      if (breakTimer) clearTimeout(breakTimer);
+      breakTimer = null;
+      if (adManager) for (const [event, fn] of adListeners) adManager.removeEventListener(event, fn);
+      adManager = null;
+    };
 
     // The player key check (this site may play) and the analytics of this impression, when the embedder gave a key.
     let license: LicenseSession | null = null;
@@ -239,6 +400,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       }
       const cueTrack = cueTrackRef.current;
       if (cueTrack && cueTrack.mode === "showing") cueTrack.mode = "hidden";
+      checkAdBreak();
     };
     const onAddTrack = () => { if (!cancelled) bindCueTrack(); };
     const onDuration = () => {
@@ -258,6 +420,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     video.addEventListener("volumechange", onVolumeChange);
+    video.addEventListener("seeking", onSeeking);
+    video.addEventListener("seeked", onSeeked);
     video.textTracks.addEventListener("addtrack", onAddTrack);
 
     void (async () => {
@@ -312,6 +476,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("trackschanged", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
+      // Shaka reports the manifest's events while loading it, before load() resolves.
+      if (adTagUrl) player.addEventListener("timelineregionadded", onRegionAdded);
 
       if (playerKey) {
         try {
@@ -399,8 +565,13 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         collector?.markReady();
         refreshTracks();
         onReadyRef.current?.();
+        // Before the first play: Shaka starts the ad manager on the content's play event, so a pre-roll comes first.
+        await requestAds(player);
+        if (cancelled) return;
         if (autoPlay) {
-          const kick = () => void video.play().catch(() => {});
+          const kick = () => {
+            if (!adPlayingRef.current) void video.play().catch(() => {});
+          };
           kick();
           setTimeout(kick, 300);
         }
@@ -426,6 +597,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       cancelled = true;
       window.removeEventListener("pagehide", endSession);
       endSession();
+      endAds();
       endAnalytics();
       license?.stop();
       video.removeEventListener("timeupdate", onTimeUpdate);
@@ -434,22 +606,27 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("volumechange", onVolumeChange);
+      video.removeEventListener("seeking", onSeeking);
+      video.removeEventListener("seeked", onSeeked);
       video.textTracks.removeEventListener("addtrack", onAddTrack);
       unbindCueTrack();
       const p = playerRef.current;
       playerRef.current = null;
       if (p) void p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
+  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;
   }, [loop]);
 
-  const play = useCallback(() => void videoRef.current?.play().catch(() => {}), []);
+  // While an ad plays, the content stays where the ad manager put it.
+  const play = useCallback(() => {
+    if (!adPlayingRef.current) void videoRef.current?.play().catch(() => {});
+  }, []);
   const pause = useCallback(() => videoRef.current?.pause(), []);
   const seek = useCallback((s: number) => {
-    if (videoRef.current) videoRef.current.currentTime = Math.max(0, s);
+    if (videoRef.current && !adPlayingRef.current) videoRef.current.currentTime = Math.max(0, s);
   }, []);
   const setVolume = useCallback((v: number) => {
     if (videoRef.current) {
@@ -495,6 +672,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
   return {
     videoRef,
+    adContainerRef,
+    adPlaying,
     state,
     errorMsg,
     limitError,
@@ -521,6 +700,18 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     disableCaptions,
     toggleCaptions,
   };
+}
+
+/** The video plays on another device (AirPlay, Remote Playback or a Cast session): no ads are requested then. */
+function isRemotePlayback(video: HTMLVideoElement): boolean {
+  const v = video as HTMLVideoElement & { remote?: { state?: string }; webkitCurrentPlaybackTargetIsWireless?: boolean };
+  if (v.remote?.state === "connected" || v.webkitCurrentPlaybackTargetIsWireless === true) return true;
+  const cast = (window as { cast?: { framework?: { CastContext?: { getInstance?: () => { getCurrentSession?: () => unknown } } } } }).cast;
+  try {
+    return cast?.framework?.CastContext?.getInstance?.()?.getCurrentSession?.() != null;
+  } catch {
+    return false;
+  }
 }
 
 /** The DRM system's short name, from a key system id. */

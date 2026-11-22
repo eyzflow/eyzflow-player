@@ -109,6 +109,40 @@ describe("AnalyticsCollector", () => {
     expect(collector.currentState).toBe("error");
   });
 
+  it("leaves a pre-roll out of video startup and the time counters", () => {
+    const { collector, fire, video, at } = setup({ autoplay: false });
+    collector.markReady();
+    at(1_000);
+    fire("play"); // viewer presses play: the ad manager starts the pre-roll
+    at(1_200);
+    collector.beginAd();
+    video.paused = true;
+    fire("pause"); // the ad manager pauses the content
+    at(16_200);
+    expect(collector.metrics()).toMatchObject({ video_startup_ms: null, played_ms: 0, paused_ms: 0 });
+    collector.endAd();
+    video.paused = false;
+    fire("play");
+    at(16_500);
+    fire("playing");
+    at(26_500);
+    expect(collector.metrics()).toMatchObject({ video_startup_ms: 500, played_ms: 10_000, paused_ms: 0 });
+  });
+
+  it("leaves a mid-roll out of the time played", () => {
+    const { collector, fire, at } = setup();
+    fire("playing");
+    at(10_000);
+    collector.beginAd();
+    fire("pause");
+    at(40_000);
+    fire("playing"); // not counted: still in the ad break
+    collector.endAd();
+    at(45_000);
+    expect(collector.metrics()).toMatchObject({ played_ms: 15_000, paused_ms: 0 });
+    expect(collector.currentState).toBe("playing");
+  });
+
   it("stops listening when destroyed", () => {
     const { collector, fire, at } = setup();
     collector.destroy();

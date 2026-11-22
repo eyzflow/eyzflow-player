@@ -30,6 +30,7 @@ export class AnalyticsCollector {
   private startRef = 0;
   private ready = false;
   private everPlayed = false;
+  private playAsked = false;
   private readonly m: BeatMetrics = {
     player_startup_ms: null,
     video_startup_ms: null,
@@ -50,6 +51,8 @@ export class AnalyticsCollector {
   private bitrateWeighted = 0;
   private bitrateTime = 0;
   private errorCount = 0;
+  /** When the current ad break began; null outside one. */
+  private adSince: number | null = null;
   private pending: BeatError[] = [];
   private readonly listeners: Array<[EventTarget | PlayerLike, string, (e: Event) => void]> = [];
   /** Called on the first frame and on errors, so the transport sends a beat at once. */
@@ -112,9 +115,26 @@ export class AnalyticsCollector {
     return this.state;
   }
 
+  /**
+   * A linear ad started. Until `endAd`, the content's events are ignored and the time counts nowhere: not as played,
+   * paused or stalled, and not towards video startup. The impression measures the content only.
+   */
+  beginAd(): void {
+    if (this.adSince === null) this.adSince = this.now();
+  }
+
+  /** The ad break is over: the content's clock runs again from where it stopped. */
+  endAd(): void {
+    if (this.adSince === null) return;
+    const spent = this.now() - this.adSince;
+    this.adSince = null;
+    this.since += spent;
+    if (!this.everPlayed) this.startRef += spent;
+  }
+
   /** The counters so far, the time in the current state included. */
   metrics(): BeatMetrics {
-    const now = this.now();
+    const now = this.adSince ?? this.now();
     const out = { ...this.m };
     const open = now - this.since;
     if (this.state === "playing") out.played_ms += open;
@@ -151,8 +171,12 @@ export class AnalyticsCollector {
   // --- events ---------------------------------------------------------------------------------------------------------
 
   private onPlay(): void {
-    // Without autoplay, startup time counts from the viewer pressing play.
-    if (!this.everPlayed && !this.opts.autoplay) this.startRef = this.now();
+    // Without autoplay, startup time counts from the viewer first pressing play (a pre-roll resumes the content with
+    // another play event; that one does not restart the count).
+    if (!this.everPlayed && !this.opts.autoplay && !this.playAsked) {
+      this.playAsked = true;
+      this.startRef = this.now();
+    }
   }
 
   private onPlaying(): void {
@@ -245,8 +269,12 @@ export class AnalyticsCollector {
   }
 
   private on(target: EventTarget | PlayerLike, event: string, fn: (e: Event) => void): void {
-    target.addEventListener(event, fn);
-    this.listeners.push([target, event, fn]);
+    // During an ad the content is paused and resumed by the ad manager, not the viewer: those events are not counted.
+    const listener = (e: Event) => {
+      if (this.adSince === null) fn(e);
+    };
+    target.addEventListener(event, listener);
+    this.listeners.push([target, event, listener]);
   }
 
   private now(): number {

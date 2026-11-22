@@ -39,6 +39,23 @@
   background: #000;
 }
 
+/* ── Ads ──
+   IMA draws ads and their own UI (countdown, skip, "learn more") in this
+   container. Shaka sets [ad-active] while a linear ad plays: only then does
+   the container take clicks and sit above everything; the player hides its
+   controls and subtitles meanwhile. */
+.eyz-ad-container {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.eyz-ad-container[ad-active] {
+  z-index: 30;
+  pointer-events: auto;
+}
+
 /* ── Overlay (loading / error) ── */
 .eyz-overlay {
   position: absolute;

@@ -140,6 +140,8 @@ export function EyzflowPlayer({
     autoPlay: resolved.autoPlay,
     muted: config.features.muted,
     loop: config.features.loop,
+    // Both the Ads switch and a tag are needed: the switch turns ads off without losing the tag.
+    adTagUrl: (config.features.ads && config.ads?.adTagUrl.trim()) || undefined,
     onReady,
     onError,
     onLimitReached,
@@ -203,7 +205,8 @@ export function EyzflowPlayer({
         playsInline
         muted={config.features.muted}
       />
-      {shaka.activeCueLines.length > 0 && (
+      <div ref={shaka.adContainerRef} className="eyz-ad-container" />
+      {shaka.activeCueLines.length > 0 && !shaka.adPlaying && (
         <div className="eyz-text-layer" aria-live="off">
           <div className="eyz-cue">
             {shaka.activeCueLines.map((line, i) => (
@@ -215,7 +218,7 @@ export function EyzflowPlayer({
         </div>
       )}
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
-      {resolved.controls && shaka.state !== "error" && (
+      {resolved.controls && shaka.state !== "error" && !shaka.adPlaying && (
         <ControlBar
           playing={shaka.playing}
           currentTime={shaka.currentTime}
