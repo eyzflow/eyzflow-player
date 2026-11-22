@@ -17,10 +17,12 @@ const PREVIEW_WIDTH = 176;
 type Preview = { time: number; x: number; thumbnail: ShakaThumbnail | null };
 
 export function SeekBar({ currentTime, duration, buffered, onSeek, getThumbnail }: Props) {
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const bufPct = duration > 0 ? (buffered / duration) * 100 : 0;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Pointer position over the bar, in percent, for the hover fill and time tooltip.
+  const [hoverPct, setHoverPct] = useState<number | null>(null);
   // Only the latest pointer position's thumbnail is drawn.
   const requestRef = useRef(0);
 
@@ -34,9 +36,12 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, getThumbnail 
   const showPreview = useCallback(
     (clientX: number) => {
       const wrap = wrapRef.current;
-      if (!getThumbnail || !wrap || duration <= 0) return;
+      if (!wrap || duration <= 0) return;
       const rect = wrap.getBoundingClientRect();
+      if (rect.width === 0) return;
       const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      setHoverPct(ratio * 100);
+      if (!getThumbnail) return;
       const time = ratio * duration;
       // Kept inside the bar so the tile never leaves the player.
       const half = PREVIEW_WIDTH / 2;
@@ -53,6 +58,7 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, getThumbnail 
   const hidePreview = useCallback(() => {
     requestRef.current++;
     setPreview(null);
+    setHoverPct(null);
   }, []);
 
   // Without thumbnails (a new stream has none yet) nothing is drawn.
@@ -73,8 +79,10 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, getThumbnail 
     >
       <div className="eyz-seekbar-track">
         <div className="eyz-seekbar-buffered" style={{ width: `${bufPct}%` }} />
+        {hoverPct !== null && <div className="eyz-seekbar-hover" style={{ width: `${hoverPct}%` }} />}
         <div className="eyz-seekbar-filled" style={{ width: `${pct}%` }} />
       </div>
+      <div className="eyz-seekbar-scrubber" style={{ left: `${pct}%` }} />
       <input
         className="eyz-seekbar-input"
         type="range"
@@ -84,9 +92,18 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, getThumbnail 
         value={currentTime}
         onChange={onChange}
         onBlur={hidePreview}
-        aria-label="Seek"
+        aria-label="Seek slider"
         aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`}
       />
+      {hoverPct !== null && !tile && duration > 0 && (
+        <div
+          className="eyz-seekbar-tooltip"
+          style={{ left: `clamp(24px, ${hoverPct}%, calc(100% - 24px))` }}
+          aria-hidden="true"
+        >
+          {formatTime((hoverPct / 100) * duration)}
+        </div>
+      )}
       {preview && tile && (
         <div className="eyz-seek-preview" style={{ left: preview.x }} aria-hidden="true">
           <div

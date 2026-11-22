@@ -10,6 +10,8 @@ import { overlayMoment, type SignalOverlayContext } from "../lib/signal-overlay"
 import { endScreenLabels, endScreenPhase, endScreenSettings, type EndScreenItem, type EndScreenOptions } from "../lib/end-screen";
 import { EndScreen } from "./EndScreen";
 import { PlayerOverlay } from "./PlayerOverlay";
+import { Icon, type IconName } from "./controls/icons";
+import { toggleFullscreen } from "../lib/fullscreen";
 import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
 import { STREAM_CDN_ORIGIN } from "../lib/api";
@@ -296,17 +298,110 @@ export function EYZFlowPlayer({
 
   const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown && !endPhase;
 
-  // Auto-hide controls after 3s of pointer inactivity, but only while playing.
+  // Auto-hide controls after 3s of pointer inactivity, but only while playing
+  // and no settings menu is open.
   const [hiding, setHiding] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetHideTimer = useCallback(() => {
     setHiding(false);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (config.features.autoHideControls && shaka.playing) {
+    if (config.features.autoHideControls && shaka.playing && !menuOpen) {
       hideTimer.current = setTimeout(() => setHiding(true), 3000);
     }
-  }, [config.features.autoHideControls, shaka.playing]);
+  }, [config.features.autoHideControls, shaka.playing, menuOpen]);
+
+  // Clicks and shortcuts drive the video only while the controls are in charge:
+  // not during an ad, the app's overlay or the end screen.
+  const controlsActive = resolved.controls && state === "ready" && !adPlaying && !overlayShown && !endPhase;
+
+  // Centre flash after a click or shortcut (play, pause, volume, seek).
+  const [flash, setFlash] = useState<{ icon: IconName; text?: string; key: number } | null>(null);
+  const showFlash = useCallback((icon: IconName, text?: string) => {
+    setFlash((prev) => ({ icon, text, key: (prev?.key ?? 0) + 1 }));
+  }, []);
+
+  const { setVolume, setMuted, toggleCaptions, videoRef } = shaka;
+  const togglePlay = useCallback(() => {
+    if (playing) {
+      pause();
+      showFlash("pause");
+    } else {
+      play();
+      showFlash("play");
+    }
+  }, [playing, play, pause, showFlash]);
+
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      resetHideTimer();
+      if (!controlsActive || e.altKey || e.ctrlKey || e.metaKey) return;
+      const target = e.target as HTMLElement;
+      const onInput = target.tagName === "INPUT";
+      const onButton = target.tagName === "BUTTON";
+      const video = videoRef.current;
+      if (!video) return;
+      const step = (delta: number) => {
+        seek(Math.min(video.duration || Infinity, video.currentTime + delta));
+        showFlash(delta < 0 ? "chevronLeft" : "chevronRight", `${Math.abs(delta)} seconds`);
+      };
+      const vol = (delta: number) => {
+        const next = Math.round(Math.max(0, Math.min(1, video.volume + delta)) * 100) / 100;
+        setVolume(next);
+        showFlash(next === 0 ? "volumeOff" : "volumeUp", `${Math.round(next * 100)}%`);
+      };
+      switch (e.key) {
+        case " ":
+          if (onButton) return;
+          togglePlay();
+          break;
+        case "k":
+          togglePlay();
+          break;
+        case "j":
+          step(-10);
+          break;
+        case "l":
+          step(10);
+          break;
+        case "ArrowLeft":
+          if (onInput) return;
+          step(-5);
+          break;
+        case "ArrowRight":
+          if (onInput) return;
+          step(5);
+          break;
+        case "ArrowUp":
+          if (onInput) return;
+          vol(0.05);
+          break;
+        case "ArrowDown":
+          if (onInput) return;
+          vol(-0.05);
+          break;
+        case "m":
+          setMuted(!video.muted);
+          showFlash(video.muted ? "volumeUp" : "volumeOff");
+          break;
+        case "f":
+          void toggleFullscreen(containerRef.current);
+          break;
+        case "c":
+          if (config.features.captions) toggleCaptions();
+          break;
+        default:
+          if (/^[0-9]$/.test(e.key) && video.duration) {
+            seek((video.duration * Number(e.key)) / 10);
+            break;
+          }
+          return;
+      }
+      e.preventDefault();
+    },
+    [resetHideTimer, controlsActive, videoRef, seek, setVolume, setMuted, toggleCaptions, togglePlay, showFlash, config.features.captions],
+  );
 
   useEffect(() => {
     resetHideTimer();
@@ -346,7 +441,8 @@ export function EYZFlowPlayer({
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
       onFocus={resetHideTimer}
-      onKeyDown={resetHideTimer}
+      onKeyDown={onKeyDown}
+      tabIndex={resolved.controls ? 0 : undefined}
     >
       <video
         ref={shaka.videoRef}
@@ -356,6 +452,13 @@ export function EYZFlowPlayer({
         onClick={shrunk ? dismissMoment : undefined}
         title={shrunk ? endScreenBackLabel : undefined}
       />
+      {controlsActive && (
+        <div
+          className="eyz-click-layer"
+          onClick={togglePlay}
+          onDoubleClick={() => void toggleFullscreen(containerRef.current)}
+        />
+      )}
       <div ref={shaka.adContainerRef} className="eyz-ad-container" />
       {shaka.activeCueLines.length > 0 && !shaka.adPlaying && !shrunk && (
         <div className="eyz-text-layer" aria-live="off">
@@ -393,6 +496,17 @@ export function EYZFlowPlayer({
           {adCountdownLabel(shaka.adCountdown)}
         </div>
       )}
+      {flash && controlsActive && (
+        <div key={flash.key} className="eyz-flash" aria-hidden="true">
+          <div className="eyz-flash-icon"><Icon name={flash.icon} size={36} /></div>
+          {flash.text && <div className="eyz-flash-text">{flash.text}</div>}
+        </div>
+      )}
+      {controlsActive && !playing && currentTime === 0 && (
+        <button type="button" className="eyz-big-play" onClick={togglePlay} aria-label="Play">
+          <Icon name="play" size={40} />
+        </button>
+      )}
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
       {resolved.controls && shaka.state !== "error" && !shaka.adPlaying && (
         <ControlBar
@@ -419,6 +533,8 @@ export function EYZFlowPlayer({
           onSelectTrack={shaka.selectTrack}
           onSelectTextTrack={shaka.selectTextTrack}
           onCaptionsOff={shaka.disableCaptions}
+          onToggleCaptions={shaka.toggleCaptions}
+          onMenuOpenChange={setMenuOpen}
           getThumbnail={hasThumbnails ? getThumbnail : undefined}
         />
       )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PlayerCastConfig } from "../../lib/config-types";
+import { Icon } from "./icons";
 
 type Props = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -64,13 +65,9 @@ export function CastButton({ videoRef, castConfig }: Props) {
       className={`eyz-btn${casting ? " eyz-btn--active" : ""}`}
       onClick={onClick}
       aria-label="Cast"
+      data-tooltip="Cast"
     >
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <path d="M1 13v2h2a2 2 0 00-2-2z" fill="currentColor" stroke="none" />
-        <path d="M1 10v1.5A4.5 4.5 0 015.5 16H7" />
-        <path d="M1 7v1.5A7.5 7.5 0 018.5 16H10" />
-        <rect x="5" y="3" width="12" height="9" rx="2" />
-      </svg>
+      <Icon name="cast" />
     </button>
   );
 }

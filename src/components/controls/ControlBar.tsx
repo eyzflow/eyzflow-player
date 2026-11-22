@@ -1,12 +1,11 @@
-import type { ShakaTrack, ShakaTextTrack } from "../../lib/shaka-types";
+import type { ShakaTrack, ShakaTextTrack, ShakaThumbnail } from "../../lib/shaka-types";
 import type { PlayerCastConfig, PlayerFeatures } from "../../lib/config-types";
 import { PlayPauseButton } from "./PlayPauseButton";
 import { SeekBar } from "./SeekBar";
-import type { ShakaThumbnail } from "../../lib/shaka-types";
 import { TimeDisplay } from "./TimeDisplay";
 import { VolumeControl } from "./VolumeControl";
-import { QualitySelector } from "./QualitySelector";
-import { CaptionsSelector } from "./CaptionsSelector";
+import { CaptionsButton } from "./CaptionsButton";
+import { SettingsMenu } from "./SettingsMenu";
 import { CastButton } from "./CastButton";
 import { AirPlayButton } from "./AirPlayButton";
 import { PipButton } from "./PipButton";
@@ -36,6 +35,8 @@ type Props = {
   onSelectTrack: (t: ShakaTrack) => void;
   onSelectTextTrack: (t: ShakaTextTrack) => void;
   onCaptionsOff: () => void;
+  onToggleCaptions: () => void;
+  onMenuOpenChange?: (open: boolean) => void;
   /** The seek bar preview at a time; absent without a thumbnails track. */
   getThumbnail?: (time: number) => Promise<ShakaThumbnail | null>;
 };
@@ -48,7 +49,8 @@ export function ControlBar({
   videoRef, containerRef,
   onPlay, onPause, onSeek,
   onVolume, onMute,
-  onSelectTrack, onSelectTextTrack, onCaptionsOff,
+  onSelectTrack, onSelectTextTrack, onCaptionsOff, onToggleCaptions,
+  onMenuOpenChange,
   getThumbnail,
 }: Props) {
   return (
@@ -61,21 +63,26 @@ export function ControlBar({
           <TimeDisplay currentTime={currentTime} duration={duration} />
         </div>
         <div className="eyz-controls-right">
-          {features.qualitySelector && (
-            <QualitySelector tracks={tracks} activeTrack={activeTrack} onSelect={onSelectTrack} />
+          {features.captions && textTracks.length > 0 && (
+            <CaptionsButton visible={captionsVisible} onToggle={onToggleCaptions} />
           )}
-          {features.captions && (
-            <CaptionsSelector
-              textTracks={textTracks}
-              activeTextTrack={activeTextTrack}
-              captionsVisible={captionsVisible}
-              onSelect={onSelectTextTrack}
-              onOff={onCaptionsOff}
-            />
-          )}
+          <SettingsMenu
+            videoRef={videoRef}
+            tracks={tracks}
+            activeTrack={activeTrack}
+            textTracks={textTracks}
+            activeTextTrack={activeTextTrack}
+            captionsVisible={captionsVisible}
+            showQuality={features.qualitySelector}
+            showSubtitles={features.captions}
+            onSelectTrack={onSelectTrack}
+            onSelectTextTrack={onSelectTextTrack}
+            onCaptionsOff={onCaptionsOff}
+            onOpenChange={onMenuOpenChange}
+          />
+          {features.pip && <PipButton videoRef={videoRef} />}
           {features.airplay && <AirPlayButton videoRef={videoRef} />}
           {features.chromecast && <CastButton videoRef={videoRef} castConfig={castConfig} />}
-          {features.pip && <PipButton videoRef={videoRef} />}
           <FullscreenButton containerRef={containerRef} />
         </div>
       </div>

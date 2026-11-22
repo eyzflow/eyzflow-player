@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Icon } from "./icons";
 
 type Props = { videoRef: React.RefObject<HTMLVideoElement | null> };
 
@@ -22,11 +23,8 @@ export function PipButton({ videoRef }: Props) {
   if (!supported) return null;
 
   return (
-    <button className="eyz-btn eyz-btn--pip" onClick={onClick} aria-label="Picture in picture">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <rect x="1" y="3" width="16" height="12" rx="2" />
-        <rect x="9" y="9" width="7" height="5" rx="1" fill="currentColor" stroke="none" />
-      </svg>
+    <button className="eyz-btn eyz-btn--pip" onClick={onClick} aria-label="Miniplayer" data-tooltip="Miniplayer (i)">
+      <Icon name="pip" />
     </button>
   );
 }

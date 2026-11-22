@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.5.0
+npm install github:eyzflow/eyzflow-player#v0.6.0
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -62,10 +62,29 @@ export function Watch() {
 
 See [`sample-config.json`](sample-config.json) for the shape of a player config.
 
+## Controls
+
+The control bar follows the layout viewers know from YouTube: a thin seek bar in the theme's `accentColor` with a time tooltip (or the thumbnail) on hover, then play, volume (the slider slides out on hover) and time on the left, and subtitles, settings, picture in picture, AirPlay, cast and fullscreen on the right. The settings menu holds Subtitles/CC, Playback speed (0.25–2×) and Quality; `features.captions` and `features.qualitySelector` hide their entries.
+
+Clicking the video plays or pauses it and double-clicking goes fullscreen. With the player focused:
+
+| Key | Action |
+| --- | --- |
+| `k` or space | Play / pause |
+| `j` / `l` | Back / forward 10 s |
+| ← / → | Back / forward 5 s |
+| ↑ / ↓ | Volume up / down |
+| `m` | Mute |
+| `f` | Fullscreen |
+| `c` | Subtitles on / off |
+| `0`–`9` | Jump to 0–90 % |
+
+Clicks and keys don't act during an ad, the end screen or the app's overlay.
+
 ## Languages, quality and thumbnails
 
-- **Languages:** the language props are read when a stream loads, so changing them doesn't restart playback. The viewer can still switch subtitles in the CC menu.
-- **Quality:** `maxBitrate` (or the config's `maxBitrate`) caps the renditions the player picks, e.g. `5000000` for 5 Mbps. Renditions above it are not offered in the quality menu either.
+- **Languages:** the language props are read when a stream loads, so changing them doesn't restart playback. The viewer can still switch subtitles with the CC button or under Settings → Subtitles/CC.
+- **Quality:** `maxBitrate` (or the config's `maxBitrate`) caps the renditions the player picks, e.g. `5000000` for 5 Mbps. Renditions above it are not offered under Settings → Quality either.
 - **Thumbnails:** hovering or dragging the seek bar shows the frame at that point, from the stream's `thumbnails/thumbnail.vtt` (WebVTT sprites with `#xywh`). A stream without one shows no preview, and no error. `features.thumbnails: false` in the config turns them off.
 
 ## Ads
