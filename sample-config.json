@@ -21,7 +21,8 @@
     "pip": true,
     "ads": false,
     "autoHideControls": true,
-    "thumbnails": true
+    "thumbnails": true,
+    "seekButtons": true
   },
   "cast": {
     "receiverAppId": "",
@@ -31,5 +32,9 @@
   "ads": {
     "adTagUrl": ""
   },
-  "maxBitrate": 5000000
+  "maxBitrate": 5000000,
+  "seek": {
+    "arrowKeySeconds": 5,
+    "buttonSeconds": 10
+  }
 }

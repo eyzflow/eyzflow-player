@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, type PlayerConfig } from "./config-types";
-import { endScreenLabels, endScreenPhase, endScreenSettings, formatRuntime } from "./end-screen";
+import { cornerVideoSize, endScreenLabels, endScreenPhase, endScreenSettings, formatRuntime } from "./end-screen";
 import type { StreamSignal } from "./stream-signals";
 
 const film = { streamId: "a", title: "Film A" };
@@ -17,7 +17,7 @@ describe("endScreenSettings", () => {
       enabled: true,
       autoplaySeconds: 10,
       showAt: "credits",
-      shrinkVideo: true,
+      shrinkVideo: false,
       secondsBeforeEnd: 20,
     });
   });
@@ -98,5 +98,25 @@ describe("formatRuntime and labels", () => {
     expect(endScreenLabels("de-DE").nextIn(5)).toBe("Weiter in 5");
     expect(endScreenLabels("fr").moreLikeThis).toBe("Titres similaires");
     expect(endScreenLabels("ja").upNext).toBe("Up next");
+  });
+});
+
+describe("cornerVideoSize", () => {
+  it("takes 42% of a 16:9 player for a 16:9 film", () => {
+    expect(cornerVideoSize(1280, 720, 1920, 1080)).toEqual({ width: 538, height: 302 });
+  });
+  it("fits the picture, not the player, in a tall player", () => {
+    // A 1024×768 fill player with a 720×576 (5:4) film: at the film's own shape, 44% of the player's height.
+    expect(cornerVideoSize(1024, 768, 720, 576)).toEqual({ width: 422, height: 338 });
+    // A phone in portrait: half the width, no black bars above and below.
+    expect(cornerVideoSize(390, 844, 1920, 1080)).toEqual({ width: 195, height: 110 });
+  });
+  it("never takes more than 44% of the player's height", () => {
+    // A wide, short player: the height limit wins.
+    expect(cornerVideoSize(1600, 400, 1920, 1080)).toEqual({ width: 313, height: 176 });
+  });
+  it("assumes 16:9 before the film's size is known, and nothing without a player size", () => {
+    expect(cornerVideoSize(1280, 720, 0, 0)).toEqual({ width: 538, height: 302 });
+    expect(cornerVideoSize(0, 0, 1920, 1080)).toBeNull();
   });
 });

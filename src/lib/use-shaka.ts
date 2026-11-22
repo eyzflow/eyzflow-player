@@ -22,6 +22,7 @@ import { CuePointSchedule, countdownLength, countdownSeconds, type CuePointLike 
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
 import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
+import { seekTarget } from "./seek-steps";
 
 export type ShakaState = "idle" | "loading" | "ready" | "error";
 
@@ -119,6 +120,11 @@ export type UseShakaReturn = {
   play: () => void;
   pause: () => void;
   seek: (seconds: number) => void;
+  /**
+   * Seeks `delta` seconds from where playback is, or from where the seek before it is still heading, so quick presses
+   * add up. Returns where it lands, or null when it can't seek (no video, or an ad plays).
+   */
+  seekBy: (delta: number) => number | null;
   setVolume: (v: number) => void;
   setMuted: (m: boolean) => void;
   selectTrack: (track: ShakaTrack) => void;
@@ -142,6 +148,9 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [adPlaying, setAdPlaying] = useState(false);
   // Read by play/seek and the autoplay kick, which must not touch the content while an ad plays over it.
   const adPlayingRef = useRef(false);
+  // Where the last seek is heading until the video gets there: `currentTime` can lag behind while a seek runs, so a
+  // second quick ← or → would otherwise start from the old position again.
+  const pendingSeekRef = useRef<number | null>(null);
   const [adCountdown, setAdCountdown] = useState<number | null>(null);
   // Read while playing, so switching it doesn't reload the stream.
   const adCountdownOnRef = useRef(adCountdownOn);
@@ -490,6 +499,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     };
     const onSeeked = () => {
       seeking = false;
+      // A newer seek aborts the one before it, so `seeked` only comes once the last of a run of quick seeks arrived.
+      pendingSeekRef.current = null;
       lastTime = video.currentTime;
       updateSignal();
       if (!cancelled && !adPlayingRef.current) onSeekedRef.current?.(video.currentTime);
@@ -814,11 +825,25 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const video = videoRef.current;
     const signal = activeSignalRef.current;
     if (!video || !signal || adPlayingRef.current) return;
+    pendingSeekRef.current = null;
     // A span that runs to the end of the film ends it.
     video.currentTime = Number.isFinite(video.duration) ? Math.min(signal.end, video.duration) : signal.end;
   }, []);
   const seek = useCallback((s: number) => {
-    if (videoRef.current && !adPlayingRef.current) videoRef.current.currentTime = Math.max(0, s);
+    const video = videoRef.current;
+    if (!video || adPlayingRef.current) return;
+    const target = Math.max(0, s);
+    pendingSeekRef.current = target;
+    video.currentTime = target;
+  }, []);
+  const seekBy = useCallback((delta: number) => {
+    const video = videoRef.current;
+    if (!video || adPlayingRef.current) return null;
+    const from = video.seeking && pendingSeekRef.current !== null ? pendingSeekRef.current : video.currentTime;
+    const target = seekTarget(from, delta, video.duration);
+    pendingSeekRef.current = target;
+    video.currentTime = target;
+    return target;
   }, []);
   const setVolume = useCallback((v: number) => {
     if (videoRef.current) {
@@ -900,6 +925,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     play,
     pause,
     seek,
+    seekBy,
     setVolume,
     setMuted,
     selectTrack,

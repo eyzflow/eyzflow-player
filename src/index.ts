@@ -8,6 +8,7 @@ export type {
   PlayerAdsConfig,
   PlayerDrmConfig,
 } from "./lib/config-types";
+export type { PlayerSeekConfig } from "./lib/seek-steps";
 export type { PlaybackLimitCode, PlaybackLimitError } from "./lib/playback-session";
 export type { PlayerLicenseCode, PlayerLicenseError } from "./lib/license";
 export type { SkipButtonTypes, StreamSignal, StreamSignalType } from "./lib/stream-signals";
