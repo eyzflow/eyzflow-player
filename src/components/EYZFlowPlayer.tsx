@@ -206,6 +206,8 @@ export function EYZFlowPlayer({
 
   const shaka = useShaka({
     streamId: playingStreamId,
+    // The <video> only renders once the remote config is in.
+    deferLoad: configLoading,
     isProtected: resolved.isProtected,
     drmAuthorizationKey,
     drmParameters,

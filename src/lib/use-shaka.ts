@@ -27,6 +27,8 @@ export type ShakaState = "idle" | "loading" | "ready" | "error";
 
 export type UseShakaOptions = {
   streamId: string;
+  /** Hold off loading, e.g. while the remote config loads (the <video> is not rendered yet). */
+  deferLoad?: boolean;
   isProtected: boolean;
   drmAuthorizationKey?: string;
   drmParameters?: Record<string, unknown>;
@@ -129,7 +131,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal, onTimeUpdate: onTimeUpdateCb, onPause: onPauseCb, onSeeked: onSeekedCb, onEnded: onEndedCb } = options;
+  const { streamId, deferLoad = false, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal, onTimeUpdate: onTimeUpdateCb, onPause: onPauseCb, onSeeked: onSeekedCb, onEnded: onEndedCb } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
@@ -291,7 +293,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || deferLoad) return;
 
     let cancelled = false;
     setLimitError(null);
@@ -797,7 +799,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) destroyingRef.current = p.destroy();
     };
-  }, [streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
+  }, [streamId, deferLoad, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;

@@ -10,6 +10,8 @@
   `thumbnails/thumbnail.vtt` or a track the app names with `thumbnails`. `features.thumbnails: false` turns them off.
 - Playback callbacks (EYF-227): `onTimeUpdate`, `onPause`, `onSeeked` and `onEnded`, for watch progress and
   "Continue watching" in the app. None fire during an ad.
+- Fix: with a `configId`, the stream never loaded (the player waited for the config without a video element and did not
+  try again once it had one). It now loads once the config is in.
 - Removed the deprecated `EyzflowPlayer`, `EyzflowPlayerProps` and `EyzflowPlayerAnalyticsOptions` names (renamed in
   0.4.0); use `EYZFlowPlayer`, `EYZFlowPlayerProps` and `EYZFlowPlayerAnalyticsOptions`.
 
