@@ -81,10 +81,11 @@
   bottom: 72px;
   z-index: 16;
   padding: 9px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  /* Colors from the player config's theme: the control bar's background and text, the accent on hover. */
+  border: 1px solid color-mix(in srgb, var(--eyz-text) 55%, transparent);
   border-radius: calc(var(--eyz-border-radius, 10px) * 0.6);
-  background: rgba(0, 0, 0, 0.72);
-  color: #fff;
+  background: var(--eyz-bar);
+  color: var(--eyz-text);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
