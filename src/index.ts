@@ -1,17 +1,17 @@
 export { EYZFlowPlayer } from "./components/EYZFlowPlayer";
 export type { EYZFlowPlayerProps, EYZFlowPlayerAnalyticsOptions } from "./components/EYZFlowPlayer";
 
-// Deprecated spellings, kept for one release. Removed in 0.4.0.
+// Deprecated spellings, kept for one release. Removed in 0.5.0.
 import {
   EYZFlowPlayer,
   type EYZFlowPlayerProps,
   type EYZFlowPlayerAnalyticsOptions,
 } from "./components/EYZFlowPlayer";
-/** @deprecated Renamed to `EYZFlowPlayer`. This alias is removed in 0.4.0. */
+/** @deprecated Renamed to `EYZFlowPlayer`. This alias is removed in 0.5.0. */
 export const EyzflowPlayer = EYZFlowPlayer;
-/** @deprecated Renamed to `EYZFlowPlayerProps`. This alias is removed in 0.4.0. */
+/** @deprecated Renamed to `EYZFlowPlayerProps`. This alias is removed in 0.5.0. */
 export type EyzflowPlayerProps = EYZFlowPlayerProps;
-/** @deprecated Renamed to `EYZFlowPlayerAnalyticsOptions`. This alias is removed in 0.4.0. */
+/** @deprecated Renamed to `EYZFlowPlayerAnalyticsOptions`. This alias is removed in 0.5.0. */
 export type EyzflowPlayerAnalyticsOptions = EYZFlowPlayerAnalyticsOptions;
 export type {
   PlayerConfig,
