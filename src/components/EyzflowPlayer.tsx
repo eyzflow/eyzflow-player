@@ -5,6 +5,7 @@ import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { adCountdownLabel } from "../lib/ad-countdown";
+import { skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
 import { PlayerOverlay } from "./PlayerOverlay";
 import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
@@ -63,6 +64,11 @@ export type EyzflowPlayerProps = {
   controls?: boolean;
   /** Fill parent container instead of 16:9 aspect ratio */
   fill?: boolean;
+  /**
+   * Playback entered an intro, recap or credits signal marked on the stream (Stream → Signals), or left one (null).
+   * For example, offer the next episode when `closing_credits` starts.
+   */
+  onSignal?: (signal: StreamSignal | null) => void;
   onError?: (msg: string) => void;
   onReady?: () => void;
 };
@@ -82,6 +88,7 @@ export function EyzflowPlayer({
   autoPlay: autoPlayProp,
   controls: controlsProp,
   fill = false,
+  onSignal,
   onError,
   onReady,
 }: EyzflowPlayerProps) {
@@ -145,10 +152,14 @@ export function EyzflowPlayer({
     adTagUrl: (config.features.ads && config.ads?.adTagUrl.trim()) || undefined,
     adCountdown: config.features.adCountdown !== false,
     adCountdownSeconds: config.ads?.countdownSeconds,
+    onSignal,
     onReady,
     onError,
     onLimitReached,
   });
+
+  const { activeSignal, skipSignal, adPlaying, state } = shaka;
+  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready";
 
   // Auto-hide controls after 3s of pointer inactivity, but only while playing.
   const [hiding, setHiding] = useState(false);
@@ -219,6 +230,11 @@ export function EyzflowPlayer({
             ))}
           </div>
         </div>
+      )}
+      {showSkip && activeSignal && (
+        <button type="button" key={activeSignal.id} className="eyz-skip-signal" onClick={skipSignal}>
+          {skipSignalLabel(activeSignal.type)}
+        </button>
       )}
       {shaka.adCountdown !== null && !shaka.adPlaying && (
         <div className="eyz-ad-countdown" role="status" aria-live="polite">

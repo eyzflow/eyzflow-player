@@ -14,7 +14,8 @@ import {
 } from "./playback-session";
 import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
 import { loadIma } from "./ima-loader";
-import { AdBreakSchedule, type TimelineRegionLike } from "./ad-breaks";
+import { AdBreakSchedule } from "./ad-breaks";
+import { SignalSchedule, type SignalRegionLike, type StreamSignal } from "./stream-signals";
 import { withTargeting } from "./ad-tag";
 import { CuePointSchedule, countdownLength, countdownSeconds, type CuePointLike } from "./ad-countdown";
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
@@ -52,6 +53,8 @@ export type UseShakaOptions = {
   adCountdownSeconds?: number;
   /** The player key check refused this site or key. */
   onLicenseError?: (error: PlayerLicenseError) => void;
+  /** Playback entered an intro, recap or credits signal (or left one: null). */
+  onSignal?: (signal: StreamSignal | null) => void;
   onReady?: () => void;
   onError?: (msg: string) => void;
   /** A plan's stream or device limit was reached, or the viewer was signed out on this device. */
@@ -85,6 +88,10 @@ export type UseShakaReturn = {
   captionsVisible: boolean;
   /** Text lines of the currently active subtitle cues, for custom rendering. */
   activeCueLines: string[];
+  /** The intro, recap or credits signal playback is in, if any. */
+  activeSignal: StreamSignal | null;
+  /** Jumps to the end of the active signal. */
+  skipSignal: () => void;
   play: () => void;
   pause: () => void;
   seek: (seconds: number) => void;
@@ -97,7 +104,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
@@ -130,6 +137,9 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [activeTextTrack, setActiveTextTrack] = useState<ShakaTextTrack | null>(null);
   const [captionsVisible, setCaptionsVisible] = useState(false);
   const [activeCueLines, setActiveCueLines] = useState<string[]>([]);
+  const [activeSignal, setActiveSignal] = useState<StreamSignal | null>(null);
+  // Compared on each time update, so the state (and onSignal) only changes when playback enters or leaves a signal.
+  const activeSignalRef = useRef<StreamSignal | null>(null);
 
   // Cues are rendered by the player UI (not the browser's native cue box),
   // so keep the native tracks "hidden": cues stay parsed and cuechange keeps
@@ -186,12 +196,14 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const onErrorRef = useRef(onError);
   const onLimitReachedRef = useRef(onLimitReached);
   const onLicenseErrorRef = useRef(onLicenseError);
+  const onSignalRef = useRef(onSignal);
   const configIdRef = useRef(configId);
   useEffect(() => {
     onReadyRef.current = onReady;
     onErrorRef.current = onError;
     onLimitReachedRef.current = onLimitReached;
     onLicenseErrorRef.current = onLicenseError;
+    onSignalRef.current = onSignal;
     configIdRef.current = configId;
   });
 
@@ -242,6 +254,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     adPlayingRef.current = false;
     setAdPlaying(false);
     setAdCountdown(null);
+    activeSignalRef.current = null;
+    setActiveSignal(null);
 
     // Client-side ads through Shaka's ad manager and IMA. The SDK starts loading now, alongside the licence and
     // manifest, so a pre-roll is usually ready by the time the content is.
@@ -375,9 +389,20 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         onAdStopped();
       }
     };
+    // The intro, recap and credits marked on the stream (eyzflow signal events in the MPD).
+    const signals = new SignalSchedule();
+    const updateSignal = () => {
+      if (cancelled) return;
+      const next = signals.size ? signals.at(video.currentTime) : null;
+      if (next?.id === activeSignalRef.current?.id) return;
+      activeSignalRef.current = next;
+      setActiveSignal(next);
+      onSignalRef.current?.(next);
+    };
     const onRegionAdded = (e: Event) => {
-      const region = (e as CustomEvent<TimelineRegionLike>).detail;
-      if (region) adBreaks.addRegion(region);
+      const region = (e as CustomEvent<SignalRegionLike>).detail;
+      if (!region) return;
+      if (!adBreaks.addRegion(region) && signals.addRegion(region)) updateSignal();
     };
     const checkAdBreak = () => {
       const now = video.currentTime;
@@ -408,6 +433,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const onSeeked = () => {
       seeking = false;
       lastTime = video.currentTime;
+      updateSignal();
     };
     const endAds = () => {
       if (breakTimer) clearTimeout(breakTimer);
@@ -448,6 +474,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       if (cueTrack && cueTrack.mode === "showing") cueTrack.mode = "hidden";
       checkAdBreak();
       updateCountdown();
+      updateSignal();
     };
     const onAddTrack = () => { if (!cancelled) bindCueTrack(); };
     const onDuration = () => {
@@ -532,7 +559,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
       // Shaka reports the manifest's events while loading it, before load() resolves.
-      if (adTagUrl) player.addEventListener("timelineregionadded", onRegionAdded);
+      player.addEventListener("timelineregionadded", onRegionAdded);
 
       if (playerKey) {
         try {
@@ -687,6 +714,13 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     if (!adPlayingRef.current) void videoRef.current?.play().catch(() => {});
   }, []);
   const pause = useCallback(() => videoRef.current?.pause(), []);
+  const skipSignal = useCallback(() => {
+    const video = videoRef.current;
+    const signal = activeSignalRef.current;
+    if (!video || !signal || adPlayingRef.current) return;
+    // A span that runs to the end of the film ends it.
+    video.currentTime = Number.isFinite(video.duration) ? Math.min(signal.end, video.duration) : signal.end;
+  }, []);
   const seek = useCallback((s: number) => {
     if (videoRef.current && !adPlayingRef.current) videoRef.current.currentTime = Math.max(0, s);
   }, []);
@@ -753,6 +787,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     activeTextTrack,
     captionsVisible,
     activeCueLines,
+    activeSignal,
+    skipSignal,
     play,
     pause,
     seek,
