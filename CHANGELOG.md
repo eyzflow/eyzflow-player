@@ -12,6 +12,8 @@
   "Continue watching" in the app. None fire during an ad.
 - Fix: with a `configId`, the stream never loaded (the player waited for the config without a video element and did not
   try again once it had one). It now loads once the config is in.
+- Phone width: below 520px the volume slider, quality menu and picture-in-picture button make way, so subtitles, cast
+  and fullscreen stay on screen (they ran off the edge).
 - Removed the deprecated `EyzflowPlayer`, `EyzflowPlayerProps` and `EyzflowPlayerAnalyticsOptions` names (renamed in
   0.4.0); use `EYZFlowPlayer`, `EYZFlowPlayerProps` and `EYZFlowPlayerAnalyticsOptions`.
 

@@ -14,6 +14,7 @@
 
   position: relative;
   width: 100%;
+  container: eyz-player / inline-size;
   aspect-ratio: 16 / 9;
   background: var(--eyz-bg);
   border-radius: var(--eyz-border-radius);
@@ -495,6 +496,21 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+/* Phone width: the volume slider (phones use their buttons), quality menu and picture in picture make way, so
+   subtitles, cast and fullscreen stay on screen. */
+@container eyz-player (max-width: 520px) {
+  .eyz-controls .eyz-volume-slider,
+  .eyz-controls .eyz-quality:not(.eyz-captions),
+  .eyz-controls .eyz-btn--pip {
+    display: none;
+  }
+
+  .eyz-controls {
+    padding-inline: 8px;
+  }
 }
 
 /* ── Buttons ── */
