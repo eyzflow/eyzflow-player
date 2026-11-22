@@ -12,6 +12,8 @@ import { EndScreen } from "./EndScreen";
 import { PlayerOverlay } from "./PlayerOverlay";
 import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
+import { STREAM_CDN_ORIGIN } from "../lib/api";
+import { defaultThumbnailsUrl } from "../lib/playback-preferences";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -89,6 +91,33 @@ export type EYZFlowPlayerProps = {
    * wins when it returns something.
    */
   endScreen?: EndScreenOptions;
+  /**
+   * Audio language to start in when the stream has it (BCP 47, e.g. "de"); otherwise the stream's default. Read when a
+   * stream loads.
+   */
+  preferredAudioLanguage?: string;
+  /**
+   * Subtitles to show from the start when the stream has them in this language (BCP 47, e.g. "de"); otherwise none.
+   * The viewer can still change them. Read when a stream loads.
+   */
+  preferredSubtitleLanguage?: string;
+  /** Highest bitrate the player picks, in bits per second (video and audio together). Overrides `maxBitrate` in the config. */
+  maxBitrate?: number;
+  /**
+   * Seek bar thumbnails: `true` (default) uses the stream's own thumbnails track, a string is the URL of a WebVTT
+   * sprite track, `false` turns them off. The config's `features.thumbnails: false` turns them off too.
+   */
+  thumbnails?: boolean | string;
+  /** Where `streamId` starts, in seconds, e.g. to resume. A stream the end screen picks starts at the beginning. */
+  startTime?: number;
+  /** About four times a second while the content plays, and after a seek. Not during an ad. */
+  onTimeUpdate?: (time: number, duration: number) => void;
+  /** The viewer paused the content (not an ad break or the end). */
+  onPause?: (time: number) => void;
+  /** A seek finished at `time`. */
+  onSeeked?: (time: number) => void;
+  /** The stream played to its end. */
+  onEnded?: () => void;
   onError?: (msg: string) => void;
   onReady?: () => void;
 };
@@ -111,6 +140,15 @@ export function EYZFlowPlayer({
   onSignal,
   renderOverlay,
   endScreen,
+  preferredAudioLanguage,
+  preferredSubtitleLanguage,
+  maxBitrate,
+  thumbnails = true,
+  startTime,
+  onTimeUpdate,
+  onPause,
+  onSeeked,
+  onEnded,
   onError,
   onReady,
 }: EYZFlowPlayerProps) {
@@ -159,6 +197,12 @@ export function EYZFlowPlayer({
   // A stream the end screen picked plays in place, until the app passes another `streamId`.
   const [picked, setPicked] = useState<{ from: string; streamId: string } | null>(null);
   const playingStreamId = picked?.from === streamId ? picked.streamId : streamId;
+  const thumbnailsUrl =
+    thumbnails === false || config.features.thumbnails === false
+      ? undefined
+      : typeof thumbnails === "string"
+        ? thumbnails
+        : defaultThumbnailsUrl(STREAM_CDN_ORIGIN, playingStreamId);
 
   const shaka = useShaka({
     streamId: playingStreamId,
@@ -183,9 +227,19 @@ export function EYZFlowPlayer({
     onReady,
     onError,
     onLimitReached,
+    preferredAudioLanguage,
+    preferredSubtitleLanguage,
+    maxBitrate: maxBitrate ?? config.maxBitrate,
+    // A custom track belongs to the app's stream, not to one the end screen picked.
+    thumbnailsUrl: typeof thumbnails === "string" && playingStreamId !== streamId ? undefined : thumbnailsUrl,
+    startTime: playingStreamId === streamId ? startTime : undefined,
+    onTimeUpdate,
+    onPause,
+    onSeeked,
+    onEnded,
   });
 
-  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause, playing, currentTime, duration, hasClosingCredits } =
+  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause, playing, currentTime, duration, hasClosingCredits, hasThumbnails, getThumbnail } =
     shaka;
 
   // The app's overlay: asked for at a signal or after the end, until dismissed for that moment.
@@ -363,6 +417,7 @@ export function EYZFlowPlayer({
           onSelectTrack={shaka.selectTrack}
           onSelectTextTrack={shaka.selectTextTrack}
           onCaptionsOff={shaka.disableCaptions}
+          getThumbnail={hasThumbnails ? getThumbnail : undefined}
         />
       )}
     </div>

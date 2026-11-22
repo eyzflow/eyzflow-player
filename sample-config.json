@@ -20,7 +20,8 @@
     "captions": true,
     "pip": true,
     "ads": false,
-    "autoHideControls": true
+    "autoHideControls": true,
+    "thumbnails": true
   },
   "cast": {
     "receiverAppId": "",
@@ -29,5 +30,6 @@
   },
   "ads": {
     "adTagUrl": ""
-  }
+  },
+  "maxBitrate": 5000000
 }

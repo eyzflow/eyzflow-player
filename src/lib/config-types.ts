@@ -27,6 +27,8 @@ export type PlayerFeatures = {
   skipButtons?: boolean;
   /** The end screen (up next and similar films) when the app passes items. Missing (older configs): on. */
   endScreen?: boolean;
+  /** Thumbnails over the seek bar, from the stream's thumbnails track. Missing (older configs): on. */
+  thumbnails?: boolean;
 };
 
 export type PlayerCastConfig = {
@@ -58,6 +60,8 @@ export type PlayerConfig = {
   endScreen?: PlayerEndScreenConfig;
   /** Which signals get a skip button (`features.skipButtons`). Missing: intro, recap and opening credits. */
   skipButtonTypes?: SkipButtonTypes;
+  /** Highest bitrate the player picks, in bits per second (video and audio together). Missing: no cap. */
+  maxBitrate?: number;
 };
 
 export const DEFAULT_THEME: PlayerTheme = {
@@ -83,6 +87,7 @@ export const DEFAULT_FEATURES: PlayerFeatures = {
   adCountdown: true,
   skipButtons: true,
   endScreen: true,
+  thumbnails: true,
 };
 
 export const DEFAULT_CONFIG: PlayerConfig = {

@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.4.0
+npm install github:eyzflow/eyzflow-player#v0.5.0
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -50,8 +50,23 @@ export function Watch() {
 | `onSignal` | `(signal: StreamSignal \| null) => void` | Playback entered an intro, recap or credits signal, or left one (`null`). See [Skip intro, recap and credits](#skip-intro-recap-and-credits). |
 | `endScreen` | `EndScreenOptions` | A Netflix-style end screen with "Up next" and a row of films you pass. See [End screen](#end-screen). |
 | `renderOverlay` | `(context: SignalOverlayContext) => ReactNode` | Your own UI over the player at a signal or after the end, e.g. similar films at the closing credits. See [Overlay](#overlay-at-the-credits). |
+| `startTime` | `number` | Where `streamId` starts, in seconds, e.g. to resume. A film the end screen picks starts at the beginning. |
+| `preferredAudioLanguage` | `string` | Audio language to start in when the stream has it (`"de"`, `"fr-BE"`, `"deu"` all match German). |
+| `preferredSubtitleLanguage` | `string` | Subtitles shown from the start when the stream has them in this language; otherwise none. |
+| `maxBitrate` | `number` | Highest bitrate the player picks, in bits per second (video and audio together). Wins over the config's `maxBitrate`. |
+| `thumbnails` | `boolean \| string` | Seek bar thumbnails. `true` (default): the stream's own track; a string: the URL of a WebVTT sprite track; `false`: off. |
+| `onTimeUpdate` | `(time: number, duration: number) => void` | About four times a second while the content plays, and after a seek. Not during an ad. |
+| `onPause` | `(time: number) => void` | The viewer paused (not an ad break or the end). |
+| `onSeeked` | `(time: number) => void` | A seek finished at `time`. |
+| `onEnded` | `() => void` | The stream played to its end. |
 
 See [`sample-config.json`](sample-config.json) for the shape of a player config.
+
+## Languages, quality and thumbnails
+
+- **Languages:** the language props are read when a stream loads, so changing them doesn't restart playback. The viewer can still switch subtitles in the CC menu.
+- **Quality:** `maxBitrate` (or the config's `maxBitrate`) caps the renditions the player picks, e.g. `5000000` for 5 Mbps. Renditions above it are not offered in the quality menu either.
+- **Thumbnails:** hovering or dragging the seek bar shows the frame at that point, from the stream's `thumbnails/thumbnail.vtt` (WebVTT sprites with `#xywh`). A stream without one shows no preview, and no error. `features.thumbnails: false` in the config turns them off.
 
 ## Ads
 
