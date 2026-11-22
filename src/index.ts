@@ -11,3 +11,4 @@ export type {
 export type { PlaybackLimitCode, PlaybackLimitError } from "./lib/playback-session";
 export type { PlayerLicenseCode, PlayerLicenseError } from "./lib/license";
 export type { StreamSignal, StreamSignalType } from "./lib/stream-signals";
+export type { SignalOverlayContext, SignalOverlayControls } from "./lib/signal-overlay";

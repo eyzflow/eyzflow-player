@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
 import { adCountdownLabel } from "../lib/ad-countdown";
 import { skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
+import { overlayMoment, type SignalOverlayContext } from "../lib/signal-overlay";
 import { PlayerOverlay } from "./PlayerOverlay";
 import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
@@ -69,6 +70,12 @@ export type EyzflowPlayerProps = {
    * For example, offer the next episode when `closing_credits` starts.
    */
   onSignal?: (signal: StreamSignal | null) => void;
+  /**
+   * The app's own UI over the player while playback is in a signal (e.g. three similar films at the closing credits)
+   * or after the film ended. Return null to show nothing. It is drawn inside the player, so it stays in fullscreen,
+   * above the video and subtitles and below the control bar; the skip button hides while it shows. Not during an ad.
+   */
+  renderOverlay?: (context: SignalOverlayContext) => React.ReactNode;
   onError?: (msg: string) => void;
   onReady?: () => void;
 };
@@ -89,6 +96,7 @@ export function EyzflowPlayer({
   controls: controlsProp,
   fill = false,
   onSignal,
+  renderOverlay,
   onError,
   onReady,
 }: EyzflowPlayerProps) {
@@ -158,8 +166,22 @@ export function EyzflowPlayer({
     onLimitReached,
   });
 
-  const { activeSignal, skipSignal, adPlaying, state } = shaka;
-  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready";
+  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause } = shaka;
+
+  // The app's overlay: asked for at a signal or after the end, until dismissed for that moment.
+  const moment = overlayMoment(activeSignal, ended);
+  const momentKey = moment && `${streamId}:${moment}`;
+  const [dismissedMoment, setDismissedMoment] = useState<string | null>(null);
+  const overlay =
+    renderOverlay && momentKey && momentKey !== dismissedMoment && !adPlaying && state === "ready"
+      ? renderOverlay({
+          signal: activeSignal,
+          ended,
+          controls: { skip: skipSignal, seek, play, pause, dismiss: () => setDismissedMoment(momentKey) },
+        })
+      : null;
+  const overlayShown = overlay !== null && overlay !== undefined && overlay !== false;
+  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown;
 
   // Auto-hide controls after 3s of pointer inactivity, but only while playing.
   const [hiding, setHiding] = useState(false);
@@ -236,6 +258,7 @@ export function EyzflowPlayer({
           {skipSignalLabel(activeSignal.type)}
         </button>
       )}
+      {overlayShown && <div className="eyz-signal-overlay">{overlay}</div>}
       {shaka.adCountdown !== null && !shaka.adPlaying && (
         <div className="eyz-ad-countdown" role="status" aria-live="polite">
           {adCountdownLabel(shaka.adCountdown)}

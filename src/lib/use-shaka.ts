@@ -92,6 +92,8 @@ export type UseShakaReturn = {
   activeSignal: StreamSignal | null;
   /** Jumps to the end of the active signal. */
   skipSignal: () => void;
+  /** The film played to its end (until it plays or seeks again). */
+  ended: boolean;
   play: () => void;
   pause: () => void;
   seek: (seconds: number) => void;
@@ -138,6 +140,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [captionsVisible, setCaptionsVisible] = useState(false);
   const [activeCueLines, setActiveCueLines] = useState<string[]>([]);
   const [activeSignal, setActiveSignal] = useState<StreamSignal | null>(null);
+  const [ended, setEnded] = useState(false);
   // Compared on each time update, so the state (and onSignal) only changes when playback enters or leaves a signal.
   const activeSignalRef = useRef<StreamSignal | null>(null);
 
@@ -256,6 +259,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setAdCountdown(null);
     activeSignalRef.current = null;
     setActiveSignal(null);
+    setEnded(false);
 
     // Client-side ads through Shaka's ad manager and IMA. The SDK starts loading now, alongside the licence and
     // manifest, so a pre-roll is usually ready by the time the content is.
@@ -428,6 +432,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     };
     const onSeeking = () => {
       seeking = true;
+      if (!cancelled) setEnded(false);
       updateCountdown();
     };
     const onSeeked = () => {
@@ -483,12 +488,16 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const onPlay = () => {
       if (cancelled) return;
       setPlaying(true);
+      setEnded(false);
       updateCountdown();
     };
     const onPause = () => {
       if (cancelled) return;
       setPlaying(false);
       updateCountdown();
+    };
+    const onEnded = () => {
+      if (!cancelled) setEnded(true);
     };
     const onVolumeChange = () => {
       if (cancelled) return;
@@ -502,6 +511,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     video.addEventListener("volumechange", onVolumeChange);
+    video.addEventListener("ended", onEnded);
     video.addEventListener("seeking", onSeeking);
     video.addEventListener("seeked", onSeeked);
     video.textTracks.addEventListener("addtrack", onAddTrack);
@@ -695,6 +705,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("volumechange", onVolumeChange);
+      video.removeEventListener("ended", onEnded);
       video.removeEventListener("seeking", onSeeking);
       video.removeEventListener("seeked", onSeeked);
       video.textTracks.removeEventListener("addtrack", onAddTrack);
@@ -789,6 +800,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     activeCueLines,
     activeSignal,
     skipSignal,
+    ended,
     play,
     pause,
     seek,

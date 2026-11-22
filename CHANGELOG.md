@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Skip intro, recap and credits (EYF-213): while playback is in one of the stream's signals (Stream → Signals in the
+  dashboard), a "Skip intro", "Skip recap" or "Skip credits" button over the video seeks to its end. It takes the
+  config's theme; text in en, de, fr and nl. `features.skipButtons: false` hides it. `onSignal` reports entering and
+  leaving a signal.
+- `renderOverlay` (EYF-218): the app's own UI inside the player at a signal or after the end, e.g. similar films at
+  the closing credits. It stays in fullscreen, sits under the control bar, hides during ads, and gets `skip`, `seek`,
+  `play`, `pause` and `dismiss`.
+
 ## 0.2.0
 
 - Playback sessions for a plan's stream and device limits: with `storefrontId`

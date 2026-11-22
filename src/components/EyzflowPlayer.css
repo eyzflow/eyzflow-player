@@ -107,6 +107,24 @@
   bottom: 120px;
 }
 
+/* ── The app's overlay (renderOverlay) at a signal or after the end: over the video and subtitles, under the control
+   bar, whose space it leaves free while the bar shows. The layer takes no clicks; the app's content does. ── */
+.eyz-signal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+  transition: bottom var(--eyz-transition);
+}
+
+.eyz-player:not(.eyz-player--hide-controls) .eyz-signal-overlay {
+  bottom: 72px;
+}
+
+.eyz-signal-overlay > * {
+  pointer-events: auto;
+}
+
 /* ── Overlay (loading / error) ── */
 .eyz-overlay {
   position: absolute;
