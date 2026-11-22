@@ -7,7 +7,7 @@ import { ControlBar } from "./controls/ControlBar";
 import { adCountdownLabel } from "../lib/ad-countdown";
 import { skipButtonFor, skipSignalLabel, type StreamSignal } from "../lib/stream-signals";
 import { overlayMoment, type SignalOverlayContext } from "../lib/signal-overlay";
-import { endScreenLabels, endScreenPhase, endScreenSettings, type EndScreenItem, type EndScreenOptions } from "../lib/end-screen";
+import { cornerVideoSize, endScreenLabels, endScreenPhase, endScreenSettings, type EndScreenItem, type EndScreenOptions } from "../lib/end-screen";
 import { EndScreen } from "./EndScreen";
 import { PlayerOverlay } from "./PlayerOverlay";
 import { Icon, type IconName } from "./controls/icons";
@@ -16,6 +16,8 @@ import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
 import { STREAM_CDN_ORIGIN } from "../lib/api";
 import { defaultThumbnailsUrl } from "../lib/playback-preferences";
+import { seekSteps as resolveSeekSteps, type PlayerSeekConfig } from "../lib/seek-steps";
+import { SeekButtons, SeekIcon } from "./controls/SeekButtons";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -32,6 +34,7 @@ function mergeConfig(
     skipButtonTypes: patch?.skipButtonTypes
       ? { ...base.skipButtonTypes, ...patch.skipButtonTypes }
       : base.skipButtonTypes,
+    seek: patch?.seek ? { ...base.seek, ...patch.seek } : base.seek,
     drm: patch?.drm
       ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
       : base.drm,
@@ -110,6 +113,11 @@ export type EYZFlowPlayerProps = {
    * sprite track, `false` turns them off. The config's `features.thumbnails: false` turns them off too.
    */
   thumbnails?: boolean | string;
+  /**
+   * How far ← / → (`arrowKeySeconds`, default 5) and the back and forward buttons, J and L (`buttonSeconds`, default
+   * 10) jump, in whole seconds. Overrides the config's `seek`.
+   */
+  seekSteps?: PlayerSeekConfig;
   /** Where `streamId` starts, in seconds, e.g. to resume. A stream the end screen picks starts at the beginning. */
   startTime?: number;
   /** About four times a second while the content plays, and after a seek. Not during an ad. */
@@ -146,6 +154,7 @@ export function EYZFlowPlayer({
   preferredSubtitleLanguage,
   maxBitrate,
   thumbnails = true,
+  seekSteps: seekStepsProp,
   startTime,
   onTimeUpdate,
   onPause,
@@ -278,6 +287,22 @@ export function EYZFlowPlayer({
   const [dismissedEndMoment, setDismissedEndMoment] = useState<string | null>(null);
   const endPhase = endShownPhase && endMomentKey !== dismissedEndMoment ? endShownPhase : null;
   const shrunk = endPhase === "credits" && endSettings.shrinkVideo;
+  // The corner video's size, from the player's size and the film's own shape; kept up to date while it shows.
+  const [cornerSize, setCornerSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const container = containerRef.current;
+    const video = shaka.videoRef.current;
+    if (!shrunk || !container || !video) return;
+    const measure = () => setCornerSize(cornerVideoSize(container.clientWidth, container.clientHeight, video.videoWidth, video.videoHeight));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    video.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      video.removeEventListener("resize", measure);
+    };
+  }, [shrunk, shaka.videoRef]);
   const dismissMoment = useCallback(() => {
     if (endMomentKey) setDismissedEndMoment(endMomentKey);
   }, [endMomentKey]);
@@ -317,21 +342,36 @@ export function EYZFlowPlayer({
   const controlsActive = resolved.controls && state === "ready" && !adPlaying && !overlayShown && !endPhase;
 
   // Centre flash after a click or shortcut (play, pause, volume, seek).
-  const [flash, setFlash] = useState<{ icon: IconName; text?: string; key: number } | null>(null);
-  const showFlash = useCallback((icon: IconName, text?: string) => {
-    setFlash((prev) => ({ icon, text, key: (prev?.key ?? 0) + 1 }));
+  // Seeks flash on their own side, clear of the back, play and forward buttons in the middle.
+  const [flash, setFlash] = useState<{ icon: IconName | "replay" | "forward"; text?: string; side?: "left" | "right"; key: number } | null>(null);
+  const showFlash = useCallback((icon: IconName | "replay" | "forward", text?: string, side?: "left" | "right") => {
+    setFlash((prev) => ({ icon, text, side, key: (prev?.key ?? 0) + 1 }));
   }, []);
 
-  const { setVolume, setMuted, toggleCaptions, videoRef } = shaka;
+  const { setVolume, setMuted, toggleCaptions, videoRef, seekBy } = shaka;
+  const steps = resolveSeekSteps(config.seek, seekStepsProp);
+
+  // Quick presses in one direction add up in the flash ("15 seconds"), as on YouTube.
+  const seekRun = useRef<{ direction: number; total: number; at: number } | null>(null);
+  const stepBy = useCallback(
+    (delta: number, flashIt = true) => {
+      if (seekBy(delta) === null) return;
+      const direction = Math.sign(delta);
+      const now = Date.now();
+      const run = seekRun.current;
+      const total = run && run.direction === direction && now - run.at < 1000 ? run.total + Math.abs(delta) : Math.abs(delta);
+      seekRun.current = { direction, total, at: now };
+      if (flashIt) showFlash(delta < 0 ? "replay" : "forward", `${total} seconds`, delta < 0 ? "left" : "right");
+    },
+    [seekBy, showFlash],
+  );
+  const seekButtonsOn = config.features.seekButtons !== false;
   const togglePlay = useCallback(() => {
-    if (playing) {
-      pause();
-      showFlash("pause");
-    } else {
-      play();
-      showFlash("play");
-    }
-  }, [playing, play, pause, showFlash]);
+    if (playing) pause();
+    else play();
+    // The middle play button already shows the change when it is on screen.
+    if (!seekButtonsOn || hiding) showFlash(playing ? "pause" : "play");
+  }, [playing, play, pause, showFlash, seekButtonsOn, hiding]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -339,13 +379,11 @@ export function EYZFlowPlayer({
       if (!controlsActive || e.altKey || e.ctrlKey || e.metaKey) return;
       const target = e.target as HTMLElement;
       const onInput = target.tagName === "INPUT";
+      // The seek slider's own arrow step (a tenth of a second) is too small to notice: ← and → jump there too.
+      const onSeekSlider = target.classList.contains("eyz-seekbar-input");
       const onButton = target.tagName === "BUTTON";
       const video = videoRef.current;
       if (!video) return;
-      const step = (delta: number) => {
-        seek(Math.min(video.duration || Infinity, video.currentTime + delta));
-        showFlash(delta < 0 ? "chevronLeft" : "chevronRight", `${Math.abs(delta)} seconds`);
-      };
       const vol = (delta: number) => {
         const next = Math.round(Math.max(0, Math.min(1, video.volume + delta)) * 100) / 100;
         setVolume(next);
@@ -360,18 +398,18 @@ export function EYZFlowPlayer({
           togglePlay();
           break;
         case "j":
-          step(-10);
+          stepBy(-steps.buttons);
           break;
         case "l":
-          step(10);
+          stepBy(steps.buttons);
           break;
         case "ArrowLeft":
-          if (onInput) return;
-          step(-5);
+          if (onInput && !onSeekSlider) return;
+          stepBy(-steps.arrowKeys);
           break;
         case "ArrowRight":
-          if (onInput) return;
-          step(5);
+          if (onInput && !onSeekSlider) return;
+          stepBy(steps.arrowKeys);
           break;
         case "ArrowUp":
           if (onInput) return;
@@ -400,7 +438,7 @@ export function EYZFlowPlayer({
       }
       e.preventDefault();
     },
-    [resetHideTimer, controlsActive, videoRef, seek, setVolume, setMuted, toggleCaptions, togglePlay, showFlash, config.features.captions],
+    [resetHideTimer, controlsActive, videoRef, seek, stepBy, steps.arrowKeys, steps.buttons, setVolume, setMuted, toggleCaptions, togglePlay, showFlash, config.features.captions],
   );
 
   useEffect(() => {
@@ -411,6 +449,7 @@ export function EYZFlowPlayer({
   // Apply theme as CSS custom properties
   const { theme } = config;
   const cssVars = {
+    ...(cornerSize && { "--eyz-corner-width": `${cornerSize.width}px`, "--eyz-corner-height": `${cornerSize.height}px` }),
     "--eyz-accent": theme.accentColor,
     "--eyz-accent-hover": adjustAccent(theme.accentColor),
     "--eyz-bg": theme.backgroundColor,
@@ -497,15 +536,28 @@ export function EYZFlowPlayer({
         </div>
       )}
       {flash && controlsActive && (
-        <div key={flash.key} className="eyz-flash" aria-hidden="true">
-          <div className="eyz-flash-icon"><Icon name={flash.icon} size={36} /></div>
+        <div key={flash.key} className={`eyz-flash${flash.side ? ` eyz-flash--${flash.side}` : ""}`} aria-hidden="true">
+          <div className="eyz-flash-icon">
+            {flash.icon === "replay" || flash.icon === "forward" ? <SeekIcon direction={flash.icon} size={36} /> : <Icon name={flash.icon} size={36} />}
+          </div>
           {flash.text && <div className="eyz-flash-text">{flash.text}</div>}
         </div>
       )}
-      {controlsActive && !playing && currentTime === 0 && (
+      {controlsActive && !playing && currentTime === 0 ? (
         <button type="button" className="eyz-big-play" onClick={togglePlay} aria-label="Play">
           <Icon name="play" size={40} />
         </button>
+      ) : (
+        controlsActive &&
+        seekButtonsOn && (
+          <SeekButtons
+            seconds={steps.buttons}
+            playing={playing}
+            onBack={() => { resetHideTimer(); stepBy(-steps.buttons, false); }}
+            onForward={() => { resetHideTimer(); stepBy(steps.buttons, false); }}
+            onTogglePlay={() => { resetHideTimer(); if (playing) pause(); else play(); }}
+          />
+        )
       )}
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
       {resolved.controls && shaka.state !== "error" && !shaka.adPlaying && (

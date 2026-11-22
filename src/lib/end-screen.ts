@@ -38,7 +38,7 @@ export type EndScreenOptions = {
   title?: string;
   /** "credits": from the closing credits signal (else at the end); "end": only once the film ended. */
   showAt?: "credits" | "end";
-  /** Shrinks the credits into a corner while the end screen shows over them. */
+  /** Shrinks the credits into a corner while the end screen shows over them. Default off: they play on behind it. */
   shrinkVideo?: boolean;
   /**
    * Without a closing credits signal on the stream, the end screen shows this many seconds before the end, as at the
@@ -60,6 +60,7 @@ export type PlayerEndScreenConfig = {
   /** Seconds the "Up next" countdown runs, 0–30; 0 is no autoplay. Missing: 10. */
   autoplaySeconds?: number;
   showAt?: "credits" | "end";
+  /** Shrinks the credits into a corner. Missing: off. */
   shrinkVideo?: boolean;
   /** Without a closing credits signal: seconds before the end it shows, 0–120. Missing: 20. */
   secondsBeforeEnd?: number;
@@ -96,7 +97,7 @@ export function endScreenSettings(config: PlayerConfig, options?: EndScreenOptio
     autoplaySeconds:
       seconds(options?.nextUp?.autoplaySeconds) ?? seconds(remote?.autoplaySeconds) ?? END_SCREEN_AUTOPLAY_S,
     showAt: showAt === "end" ? "end" : "credits",
-    shrinkVideo: options?.shrinkVideo ?? remote?.shrinkVideo ?? true,
+    shrinkVideo: options?.shrinkVideo ?? remote?.shrinkVideo ?? false,
     secondsBeforeEnd:
       seconds(options?.secondsBeforeEnd, END_SCREEN_BEFORE_END_MAX_S) ??
       seconds(remote?.secondsBeforeEnd, END_SCREEN_BEFORE_END_MAX_S) ??
@@ -194,4 +195,28 @@ const LABELS: Record<string, Labels> = {
 export function endScreenLabels(language?: string): Labels {
   const lang = (language ?? (typeof navigator !== "undefined" ? navigator.language : "en")).toLowerCase().split("-")[0];
   return LABELS[lang] ?? LABELS.en;
+}
+
+/** The corner video's share of the player's width, and the most of its height it may take, so the cards stay clear. */
+const CORNER_WIDTH = 0.42;
+const CORNER_WIDTH_SMALL = 0.5;
+const CORNER_MAX_HEIGHT = 0.44;
+/** Below this player width the corner video takes a larger share, or it gets too small to watch. */
+const SMALL_PLAYER = 640;
+
+/**
+ * The size of the video in the corner at the credits, in pixels: the picture itself at its own aspect ratio, so a
+ * player of another shape (fill on a tall screen) doesn't shrink its black bars along with it.
+ */
+export function cornerVideoSize(
+  playerWidth: number,
+  playerHeight: number,
+  videoWidth: number,
+  videoHeight: number,
+): { width: number; height: number } | null {
+  if (!(playerWidth > 0) || !(playerHeight > 0)) return null;
+  const aspect = videoWidth > 0 && videoHeight > 0 ? videoWidth / videoHeight : 16 / 9;
+  const share = playerWidth < SMALL_PLAYER ? CORNER_WIDTH_SMALL : CORNER_WIDTH;
+  const width = Math.min(playerWidth * share, playerHeight * CORNER_MAX_HEIGHT * aspect);
+  return { width: Math.round(width), height: Math.round(width / aspect) };
 }

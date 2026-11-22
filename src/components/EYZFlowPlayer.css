@@ -191,6 +191,11 @@
   align-items: center;
 }
 
+/* Beside the corner video, not under it: the player's width less the end screen's padding, the video and a gap. */
+.eyz-end-screen--shrunk .eyz-end-screen__next {
+  max-width: calc(100cqw - 28px - 16px - var(--eyz-corner-width, 42cqw) - 24px);
+}
+
 .eyz-end-screen__next-poster,
 .eyz-end-screen__card-poster {
   position: relative;
@@ -333,19 +338,37 @@
   font-weight: 600;
 }
 
-/* At the credits the video shrinks into the top-right corner, over the end screen; clicking it goes back. */
+/* At the credits the video shrinks into the top-right corner, over the end screen; clicking it goes back. It is
+   sized to the picture (--eyz-corner-width/-height, set from the film's shape), so no black bars shrink with it. */
 .eyz-video {
-  position: relative;
-  transform-origin: top right;
-  transition: transform 0.4s ease, border-radius 0.4s ease, box-shadow 0.4s ease;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transition: top 0.4s ease, right 0.4s ease, width 0.4s ease, height 0.4s ease, border-radius 0.4s ease,
+    box-shadow 0.4s ease;
 }
 
 .eyz-player--credits-shrunk .eyz-video {
   z-index: 19;
-  transform: translate(-16px, 16px) scale(0.34);
-  border-radius: 24px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+  top: 16px;
+  right: 16px;
+  width: var(--eyz-corner-width, 42%);
+  height: var(--eyz-corner-height, 42%);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 12px 40px rgba(0, 0, 0, 0.7);
   cursor: pointer;
+}
+
+.eyz-player--credits-shrunk .eyz-video:hover {
+  box-shadow: 0 0 0 2px var(--eyz-accent), 0 12px 40px rgba(0, 0, 0, 0.7);
+}
+
+@container eyz-player (max-width: 640px) {
+  .eyz-player--credits-shrunk .eyz-video {
+    top: 10px;
+    right: 10px;
+    border-radius: 8px;
+  }
 }
 
 /* Small players: the next stream without its poster, smaller cards. */
@@ -972,6 +995,106 @@
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
 }
 
+.eyz-flash--left {
+  left: 20%;
+}
+
+.eyz-flash--right {
+  left: 80%;
+}
+
+/* ── Back, play/pause and forward in the middle (as on iOS) ── */
+.eyz-seek-buttons {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  gap: clamp(24px, 8cqw, 64px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.eyz-player--hide-controls .eyz-seek-buttons {
+  opacity: 0;
+}
+
+.eyz-player--hide-controls .eyz-seek-buttons > button {
+  pointer-events: none;
+}
+
+.eyz-seek-buttons > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  transition: background 0.1s cubic-bezier(0, 0, 0.2, 1), transform 0.1s cubic-bezier(0, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.eyz-seek-buttons__step {
+  width: 56px;
+  height: 56px;
+}
+
+.eyz-seek-buttons__play {
+  width: 72px;
+  height: 72px;
+}
+
+.eyz-seek-buttons > button:hover,
+.eyz-seek-buttons > button:focus-visible {
+  background: rgba(0, 0, 0, 0.65);
+  outline: none;
+}
+
+.eyz-seek-buttons > button:focus-visible {
+  box-shadow: 0 0 0 2px var(--eyz-accent);
+}
+
+.eyz-seek-buttons > button:active {
+  transform: scale(0.92);
+}
+
+.eyz-seek-buttons__icon {
+  display: flex;
+}
+
+.eyz-seek-buttons__icon--spin-back {
+  animation: eyz-seek-spin-back 0.3s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.eyz-seek-buttons__icon--spin-forward {
+  animation: eyz-seek-spin-forward 0.3s cubic-bezier(0, 0, 0.2, 1);
+}
+
+@keyframes eyz-seek-spin-back {
+  0% { transform: rotate(0); }
+  50% { transform: rotate(-30deg); }
+  100% { transform: rotate(0); }
+}
+
+@keyframes eyz-seek-spin-forward {
+  0% { transform: rotate(0); }
+  50% { transform: rotate(30deg); }
+  100% { transform: rotate(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eyz-seek-buttons__icon--spin-back,
+  .eyz-seek-buttons__icon--spin-forward {
+    animation: none;
+  }
+}
+
 /* Phone width: the volume slider (phones use their buttons) and picture in picture make way, so subtitles,
    settings, cast and fullscreen stay on screen. */
 @container eyz-player (max-width: 520px) {
@@ -990,5 +1113,15 @@
 
   .eyz-menu {
     min-width: 220px;
+  }
+
+  .eyz-seek-buttons__step {
+    width: 48px;
+    height: 48px;
+  }
+
+  .eyz-seek-buttons__play {
+    width: 60px;
+    height: 60px;
   }
 }

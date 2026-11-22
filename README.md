@@ -54,6 +54,7 @@ export function Watch() {
 | `preferredAudioLanguage` | `string` | Audio language to start in when the stream has it (`"de"`, `"fr-BE"`, `"deu"` all match German). |
 | `preferredSubtitleLanguage` | `string` | Subtitles shown from the start when the stream has them in this language; otherwise none. |
 | `maxBitrate` | `number` | Highest bitrate the player picks, in bits per second (video and audio together). Wins over the config's `maxBitrate`. |
+| `seekSteps` | `{ arrowKeySeconds?, buttonSeconds? }` | How far ← / → (default 5) and the back and forward buttons, `j` and `l` (default 10) jump, in whole seconds (1–600). Wins over the config's `seek`. |
 | `thumbnails` | `boolean \| string` | Seek bar thumbnails. `true` (default): the stream's own track; a string: the URL of a WebVTT sprite track; `false`: off. |
 | `onTimeUpdate` | `(time: number, duration: number) => void` | About four times a second while the content plays, and after a seek. Not during an ad. |
 | `onPause` | `(time: number) => void` | The viewer paused (not an ad break or the end). |
@@ -66,18 +67,22 @@ See [`sample-config.json`](sample-config.json) for the shape of a player config.
 
 The control bar follows the layout viewers know from YouTube: a thin seek bar in the theme's `accentColor` with a time tooltip (or the thumbnail) on hover, then play, volume (the slider slides out on hover) and time on the left, and subtitles, settings, picture in picture, AirPlay, cast and fullscreen on the right. The settings menu holds Subtitles/CC, Playback speed (0.25–2×) and Quality; `features.captions` and `features.qualitySelector` hide their entries.
 
+Back, play/pause and forward buttons sit in the middle of the player, as on iOS, and show and hide with the control bar; `features.seekButtons: false` turns them off.
+
 Clicking the video plays or pauses it and double-clicking goes fullscreen. With the player focused:
 
 | Key | Action |
 | --- | --- |
 | `k` or space | Play / pause |
-| `j` / `l` | Back / forward 10 s |
-| ← / → | Back / forward 5 s |
+| `j` / `l` | Back / forward 10 s (`seek.buttonSeconds`) |
+| ← / → | Back / forward 5 s (`seek.arrowKeySeconds`), also on the seek bar |
 | ↑ / ↓ | Volume up / down |
 | `m` | Mute |
 | `f` | Fullscreen |
 | `c` | Subtitles on / off |
 | `0`–`9` | Jump to 0–90 % |
+
+Quick presses add up: each starts from where the last seek is heading. The remote config's `seek.arrowKeySeconds` and `seek.buttonSeconds` (1–600, defaults 5 and 10) set the steps, and the `seekSteps` prop wins over them.
 
 Clicks and keys don't act during an ad, the end screen or the app's overlay.
 
@@ -106,7 +111,7 @@ The intro, recap, opening and closing credits marked on a stream in the dashboar
 
 ## End screen
 
-Pass the films and the player does the rest: at the closing credits the video shrinks into the top-right corner, "Up next" counts down and plays the next stream at 0, and a row of films can be picked. A picked film plays in place.
+Pass the films and the player does the rest: at the closing credits "Up next" shows over the video, which plays on full size behind it, counts down and plays the next stream at 0, and a row of films can be picked. A picked film plays in place.
 
 ```tsx
 <EYZFlowPlayer
@@ -127,7 +132,7 @@ Pass the films and the player does the rest: at the closing credits the video sh
 - **Picking:** plays the item in place and calls `onSelect(item, { autoplay, preventDefault })`. With `preventDefault()` the player leaves it to you. When you then change `streamId`, your value wins.
 - **Back:** "Back to credits", a click on the small video, or Esc, until the film ends.
 - **Customize:** it takes the player config's theme. Every part has an `eyz-end-screen…` class (`__next`, `__play`, `__cancel`, `__row`, `__heading`, `__items`, `__card`, `__card-poster`, `__card-title`, `__badge`, …), `className` adds your own, `title` renames the row, and `renderItem(item, { select })` draws a card your way. For a layout of your own, use `renderOverlay`, which wins when it returns something.
-- **Remote config:** `features.endScreen: false` turns it off; `endScreen.autoplaySeconds` (0–30, 0 = no countdown, default 10), `endScreen.showAt` (`credits` or `end`), `endScreen.shrinkVideo` (default on) and `endScreen.secondsBeforeEnd` (0–120, default 20) tune it. The prop's values win.
+- **Remote config:** `features.endScreen: false` turns it off; `endScreen.autoplaySeconds` (0–30, 0 = no countdown, default 10), `endScreen.showAt` (`credits` or `end`), `endScreen.shrinkVideo` (shrinks the video into the top-right corner, default off) and `endScreen.secondsBeforeEnd` (0–120, default 20) tune it. The prop's values win.
 - Texts in English, German, French and Dutch. Nothing shows during an ad. Try it on the dev page with `?endScreenDemo=1`.
 
 ## Overlay at the credits

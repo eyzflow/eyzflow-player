@@ -1,5 +1,6 @@
 import type { PlayerEndScreenConfig } from "./end-screen";
 import type { SkipButtonTypes } from "./stream-signals";
+import type { PlayerSeekConfig } from "./seek-steps";
 
 export type PlayerTheme = {
   accentColor: string;
@@ -29,6 +30,8 @@ export type PlayerFeatures = {
   endScreen?: boolean;
   /** Thumbnails over the seek bar, from the stream's thumbnails track. Missing (older configs): on. */
   thumbnails?: boolean;
+  /** Back and forward buttons beside play in the middle of the player, as on iOS. Missing (older configs): on. */
+  seekButtons?: boolean;
 };
 
 export type PlayerCastConfig = {
@@ -62,6 +65,8 @@ export type PlayerConfig = {
   skipButtonTypes?: SkipButtonTypes;
   /** Highest bitrate the player picks, in bits per second (video and audio together). Missing: no cap. */
   maxBitrate?: number;
+  /** How far ← / → and the back and forward buttons jump. Missing: 5 s and 10 s. */
+  seek?: PlayerSeekConfig;
 };
 
 export const DEFAULT_THEME: PlayerTheme = {
@@ -88,6 +93,7 @@ export const DEFAULT_FEATURES: PlayerFeatures = {
   skipButtons: true,
   endScreen: true,
   thumbnails: true,
+  seekButtons: true,
 };
 
 export const DEFAULT_CONFIG: PlayerConfig = {

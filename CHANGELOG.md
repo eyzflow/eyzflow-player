@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+- Back and forward buttons (EYF-229): back, play/pause and forward in the middle of the player, as on iOS. They show
+  and hide with the control bar; `features.seekButtons: false` in the config turns them off.
+- Seek steps (EYF-229): `seek.arrowKeySeconds` (← / →, default 5) and `seek.buttonSeconds` (the buttons and `j`/`l`,
+  default 10) in the player config, 1–600 s. The `seekSteps` prop wins over the config.
+- Quick ← / → presses add up (EYF-229): each press starts from where the last seek is heading, and ← / → also jump
+  when the seek bar has focus (it used to move a tenth of a second there). The flash shows the total, e.g. "30 seconds",
+  on the side it seeks to.
+- End screen (EYF-230): at the closing credits the video now plays on full size behind the end screen; `shrinkVideo`
+  (prop or config) is off by default. With it on, the corner video is sized to the picture (about 42% of the player's
+  width, at most 44% of its height) instead of a third of the player with its black bars, and "Up next" stays beside it.
+
 ## 0.6.0
 
 - YouTube-style controls (EYF-228): a thin seek bar in the accent color with a scrubber and a time tooltip on hover
