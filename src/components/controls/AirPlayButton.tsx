@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Icon } from "./icons";
 
 type Props = { videoRef: React.RefObject<HTMLVideoElement | null> };
 
@@ -23,17 +24,9 @@ export function AirPlayButton({ videoRef }: Props) {
   if (!supported) return null;
 
   return (
-    <button className="eyz-btn" onClick={onClick} aria-label="AirPlay">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-        <path d="M9 11l4 5H5l4-5z" />
-        <path
-          d="M3 12V4a1 1 0 011-1h10a1 1 0 011 1v8"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          fill="none"
-          strokeLinecap="round"
-        />
-      </svg>
+    <button className="eyz-btn" onClick={onClick} aria-label="AirPlay"
+      data-tooltip="AirPlay">
+      <Icon name="airplay" />
     </button>
   );
 }

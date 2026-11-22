@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Icon } from "./icons";
 
 type Props = {
   volume: number;
@@ -15,38 +16,26 @@ export function VolumeControl({ volume, muted, onMute, onVolume }: Props) {
   );
 
   const displayVol = muted ? 0 : volume;
+  const label = displayVol === 0 ? "Unmute (m)" : "Mute (m)";
 
   return (
     <div className="eyz-volume">
-      <button className="eyz-btn" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"}>
-        {displayVol === 0 ? (
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-            <path d="M3 6h3l4-3v12l-4-3H3V6z" />
-            <line x1="12" y1="6" x2="16" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="16" y1="6" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        ) : displayVol < 0.5 ? (
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-            <path d="M3 6h3l4-3v12l-4-3H3V6z" />
-            <path d="M12 7a3 3 0 010 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-            <path d="M3 6h3l4-3v12l-4-3H3V6z" />
-            <path d="M12 5a5 5 0 010 8M14 3a8 8 0 010 12" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-          </svg>
-        )}
+      <button className="eyz-btn" onClick={toggleMute} aria-label={label} data-tooltip={label}>
+        <Icon name={displayVol === 0 ? "volumeOff" : displayVol < 0.5 ? "volumeDown" : "volumeUp"} />
       </button>
-      <input
-        className="eyz-volume-slider"
-        type="range"
-        min={0}
-        max={1}
-        step={0.02}
-        value={displayVol}
-        onChange={onChange}
-        aria-label="Volume"
-      />
+      <div className="eyz-volume-panel">
+        <input
+          className="eyz-volume-slider"
+          type="range"
+          min={0}
+          max={1}
+          step={0.02}
+          value={displayVol}
+          onChange={onChange}
+          style={{ "--vol-pct": `${displayVol * 100}%` } as React.CSSProperties}
+          aria-label="Volume"
+        />
+      </div>
     </div>
   );
 }

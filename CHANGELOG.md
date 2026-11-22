@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- YouTube-style controls (EYF-228): a thin seek bar in the accent color with a scrubber and a time tooltip on hover
+  (the thumbnail when the stream has them), larger white icons with tooltips, and a volume slider that slides out on
+  hover. A CC button turns subtitles on and off.
+- Settings menu (EYF-228): the gear holds Subtitles/CC, Playback speed (0.25–2×, new) and Quality, in place of the two
+  dropdowns. The controls stay up while it is open.
+- Click the video to play or pause, double-click for fullscreen; a play button in the middle before the first play,
+  and a short icon in the middle on play, pause, seek and volume.
+- Keyboard shortcuts with the player focused: `k`/space, `j`/`l` (10 s), ←/→ (5 s), ↑/↓ (volume), `m`, `f`, `c` and
+  `0`–`9`. None act during an ad, the end screen or the app's overlay.
+
 ## 0.5.0
 
 - Start position (EYF-227): `startTime` starts the stream at a point, e.g. to resume where the viewer left off.
