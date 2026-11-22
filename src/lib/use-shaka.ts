@@ -16,6 +16,7 @@ import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, ty
 import { loadIma } from "./ima-loader";
 import { AdBreakSchedule, type TimelineRegionLike } from "./ad-breaks";
 import { withTargeting } from "./ad-tag";
+import { CuePointSchedule, countdownSeconds, type CuePointLike } from "./ad-countdown";
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
 import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
@@ -45,6 +46,8 @@ export type UseShakaOptions = {
    * Ads that cannot load (blocked, empty, timed out) are skipped and the content plays.
    */
   adTagUrl?: string;
+  /** Count down the last 5 s before a mid-roll ("Ad in 5"): the config's `features.adCountdown`. Default on. */
+  adCountdown?: boolean;
   /** The player key check refused this site or key. */
   onLicenseError?: (error: PlayerLicenseError) => void;
   onReady?: () => void;
@@ -59,6 +62,8 @@ export type UseShakaReturn = {
   adContainerRef: React.RefObject<HTMLDivElement | null>;
   /** A linear ad is playing: the content is paused and its controls should be hidden. */
   adPlaying: boolean;
+  /** Seconds (5 … 1) until a mid-roll starts, while the notice should show; otherwise null. */
+  adCountdown: number | null;
   state: ShakaState;
   errorMsg: string | null;
   /** Set when playback was refused or stopped by a stream or device limit. */
@@ -90,7 +95,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, onLicenseError } = options;
+  const { streamId, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, onLicenseError } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +103,12 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [adPlaying, setAdPlaying] = useState(false);
   // Read by play/seek and the autoplay kick, which must not touch the content while an ad plays over it.
   const adPlayingRef = useRef(false);
+  const [adCountdown, setAdCountdown] = useState<number | null>(null);
+  // Read while playing, so switching it doesn't reload the stream.
+  const adCountdownOnRef = useRef(adCountdownOn);
+  useEffect(() => {
+    adCountdownOnRef.current = adCountdownOn;
+  }, [adCountdownOn]);
 
   const [state, setState] = useState<ShakaState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -226,6 +237,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setLicenseError(null);
     adPlayingRef.current = false;
     setAdPlaying(false);
+    setAdCountdown(null);
 
     // Client-side ads through Shaka's ad manager and IMA. The SDK starts loading now, alongside the licence and
     // manifest, so a pre-roll is usually ready by the time the content is.
@@ -236,6 +248,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     let planAds: boolean | null = null;
     let adTargeting: Record<string, string> = {};
     const adsOn = () => !!adTagUrl && planAds !== false;
+    // A VMAP's mid-roll cue points (streams without markers), for the countdown before them.
+    const cuePoints = new CuePointSchedule();
+    const onCuePoints = (e: Event) => {
+      cuePoints.set((e as Event & { cuepoints?: CuePointLike[] }).cuepoints ?? []);
+    };
     // The ad breaks marked on the stream (SCTE-35 events in the MPD). With any, ads play only at them.
     const adBreaks = new AdBreakSchedule();
     // A mid-roll holds the content at its marker until the ad starts, or until it turns out there is none.
@@ -251,6 +268,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       breakTimer = null;
       adPlayingRef.current = true;
       setAdPlaying(true);
+      setAdCountdown(null);
       collector?.beginAd();
     };
     const onAdStopped = () => {
@@ -292,6 +310,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       [SHAKA_AD_EVENTS.STOPPED, onBreakOver],
       [SHAKA_AD_EVENTS.ALL_COMPLETED, onBreakOver],
       [SHAKA_AD_EVENTS.ERROR, onBreakOver],
+      [SHAKA_AD_EVENTS.CUEPOINTS_CHANGED, onCuePoints],
     ];
     /** IMA and Shaka's ad manager, set up once per impression; null when ads cannot play here. */
     const adsReady = async (player: ShakaPlayerApi) => {
@@ -362,9 +381,22 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       lastTime = now;
       const player = playerRef.current;
       if (!adsOn() || seeking || adPlayingRef.current || video.paused || !player) return;
+      cuePoints.pass(previous, now);
       if (adBreaks.due(previous, now)) void playBreak(player);
     };
-    const onSeeking = () => { seeking = true; };
+    /** The notice before a mid-roll: markers on the stream, else a VMAP's cue points. Hidden while paused or seeking. */
+    const updateCountdown = () => {
+      if (cancelled) return;
+      let left: number | null = null;
+      if (adCountdownOnRef.current && adsOn() && !adPlayingRef.current && !seeking && !video.paused && !isRemotePlayback(video)) {
+        left = countdownSeconds(video.currentTime, adBreaks.hasBreaks ? adBreaks.upcomingStarts() : cuePoints.upcoming());
+      }
+      setAdCountdown(left);
+    };
+    const onSeeking = () => {
+      seeking = true;
+      updateCountdown();
+    };
     const onSeeked = () => {
       seeking = false;
       lastTime = video.currentTime;
@@ -407,13 +439,22 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       const cueTrack = cueTrackRef.current;
       if (cueTrack && cueTrack.mode === "showing") cueTrack.mode = "hidden";
       checkAdBreak();
+      updateCountdown();
     };
     const onAddTrack = () => { if (!cancelled) bindCueTrack(); };
     const onDuration = () => {
       if (!cancelled && Number.isFinite(video.duration)) setDuration(video.duration);
     };
-    const onPlay = () => { if (!cancelled) setPlaying(true); };
-    const onPause = () => { if (!cancelled) setPlaying(false); };
+    const onPlay = () => {
+      if (cancelled) return;
+      setPlaying(true);
+      updateCountdown();
+    };
+    const onPause = () => {
+      if (cancelled) return;
+      setPlaying(false);
+      updateCountdown();
+    };
     const onVolumeChange = () => {
       if (cancelled) return;
       setVolumeState(video.volume);
@@ -687,6 +728,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     videoRef,
     adContainerRef,
     adPlaying,
+    adCountdown,
     state,
     errorMsg,
     limitError,

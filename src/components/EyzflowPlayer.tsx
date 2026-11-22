@@ -4,6 +4,7 @@ import { useShaka } from "../lib/use-shaka";
 import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
+import { adCountdownLabel } from "../lib/ad-countdown";
 import { PlayerOverlay } from "./PlayerOverlay";
 import type { PlaybackLimitError } from "../lib/playback-session";
 import type { PlayerLicenseError } from "../lib/license";
@@ -142,6 +143,7 @@ export function EyzflowPlayer({
     loop: config.features.loop,
     // Both the Ads switch and a tag are needed: the switch turns ads off without losing the tag.
     adTagUrl: (config.features.ads && config.ads?.adTagUrl.trim()) || undefined,
+    adCountdown: config.features.adCountdown !== false,
     onReady,
     onError,
     onLimitReached,
@@ -215,6 +217,11 @@ export function EyzflowPlayer({
               </span>
             ))}
           </div>
+        </div>
+      )}
+      {shaka.adCountdown !== null && !shaka.adPlaying && (
+        <div className="eyz-ad-countdown" role="status" aria-live="polite">
+          {adCountdownLabel(shaka.adCountdown)}
         </div>
       )}
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />

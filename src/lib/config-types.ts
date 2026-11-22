@@ -18,6 +18,8 @@ export type PlayerFeatures = {
   pip: boolean;
   ads: boolean;
   autoHideControls: boolean;
+  /** Count down the last 5 s before a mid-roll ("Ad in 5"). Missing (older configs): on. */
+  adCountdown?: boolean;
 };
 
 export type PlayerCastConfig = {
@@ -65,6 +67,7 @@ export const DEFAULT_FEATURES: PlayerFeatures = {
   pip: true,
   ads: false,
   autoHideControls: true,
+  adCountdown: true,
 };
 
 export const DEFAULT_CONFIG: PlayerConfig = {
