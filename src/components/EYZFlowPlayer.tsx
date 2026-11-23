@@ -70,6 +70,11 @@ export type EYZFlowPlayerProps = {
   storefrontId?: string;
   /** Shown in the viewer's device list, e.g. "Living room". */
   deviceName?: string;
+  /**
+   * The offer (film or episode) `streamId` plays. With `drmAuthorizationKey` and `storefrontId`, the player reports
+   * the seconds the viewer watched for licensor royalties. Leave it out for trailers.
+   */
+  offerId?: string;
   /** A stream or device limit was reached, or the viewer was signed out on this device. */
   onLimitReached?: (limit: PlaybackLimitError) => void;
   /** Override isProtected (default comes from config) */
@@ -142,6 +147,7 @@ export function EYZFlowPlayer({
   drmAuthorizationKey,
   storefrontId,
   deviceName,
+  offerId,
   onLimitReached,
   isProtected: isProtectedProp,
   autoPlay: autoPlayProp,
@@ -227,6 +233,8 @@ export function EYZFlowPlayer({
     configId,
     analytics: analyticsProp !== false,
     cmcd: typeof analyticsProp === "object" && analyticsProp.cmcd === true,
+    // A film the end screen picked is another offer: it reports nothing.
+    offerId: playingStreamId === streamId ? offerId : undefined,
     onLicenseError,
     // A picked stream starts at once, whatever the config says.
     autoPlay: resolved.autoPlay || playingStreamId !== streamId,

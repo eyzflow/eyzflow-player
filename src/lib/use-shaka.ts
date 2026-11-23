@@ -22,6 +22,7 @@ import { CuePointSchedule, countdownLength, countdownSeconds, type CuePointLike 
 import { LICENSE_CODES, LicenseSession, licenseMessage, PlayerLicenseException, type PlayerLicenseCode, type PlayerLicenseError } from "./license";
 import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
+import { UsageReporter } from "./usage-reporter";
 import { seekTarget } from "./seek-steps";
 
 export type ShakaState = "idle" | "loading" | "ready" | "error";
@@ -46,6 +47,11 @@ export type UseShakaOptions = {
   analytics?: boolean;
   /** Add CMCD data (with the analytics impression id) to manifest and segment requests. Default false. */
   cmcd?: boolean;
+  /**
+   * The offer (film or episode) this stream plays. With a storefront viewer (`drmAuthorizationKey` and
+   * `drmParameters.storefront_id`), the seconds watched are reported for licensor royalties.
+   */
+  offerId?: string;
   /**
    * A VAST/VMAP ad tag to play through Google IMA (client-side). Only pass it when the config's `features.ads` is on.
    * Ads that cannot load (blocked, empty, timed out) are skipped and the content plays.
@@ -137,7 +143,7 @@ export type UseShakaReturn = {
 };
 
 export function useShaka(options: UseShakaOptions): UseShakaReturn {
-  const { streamId, deferLoad = false, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal, onTimeUpdate: onTimeUpdateCb, onPause: onPauseCb, onSeeked: onSeekedCb, onEnded: onEndedCb } = options;
+  const { streamId, deferLoad = false, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, muted: initMuted, loop, onReady, onError, onLimitReached, playerKey, configId, analytics = true, cmcd = false, offerId, adTagUrl, adCountdown: adCountdownOn = true, adCountdownSeconds, onLicenseError, onSignal, onTimeUpdate: onTimeUpdateCb, onPause: onPauseCb, onSeeked: onSeekedCb, onEnded: onEndedCb } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const adContainerRef = useRef<HTMLDivElement | null>(null);
@@ -516,7 +522,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     let license: LicenseSession | null = null;
     let collector: AnalyticsCollector | null = null;
     let transport: BeatTransport | null = null;
+    // The seconds watched, for licensor royalties (storefront viewers, with an offer id).
+    let usage: UsageReporter | null = null;
     const endAnalytics = () => {
+      usage?.stop();
+      usage = null;
       transport?.stop();
       transport = null;
       collector?.destroy();
@@ -725,6 +735,21 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
             // Any other failure leaves the limits to the licence request, which counts this stream itself; ads follow
             // the player config.
           }
+          if (offerId) {
+            // The same played time as the analytics (ads, pauses, seeks and stalls left out), with or without them on.
+            const meter = (collector ??= new AnalyticsCollector(video, player, { autoplay: !!autoPlay }));
+            usage = new UsageReporter({
+              playedMs: () => meter.metrics().played_ms,
+              target: {
+                storefrontId,
+                authorization: drmAuthorizationKey,
+                offerId,
+                catalogueId: typeof drmParameters?.catalogue_id === "string" ? drmParameters.catalogue_id : null,
+              },
+              media: video,
+            });
+            usage.start();
+          }
         }
         if (isProtected) {
           configureDrm(player, shaka, streamId, drmAuthorizationKey, () =>
@@ -810,7 +835,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       playerRef.current = null;
       if (p) destroyingRef.current = p.destroy();
     };
-  }, [streamId, deferLoad, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
+  }, [streamId, deferLoad, isProtected, drmAuthorizationKey, drmParameters, deviceName, autoPlay, playerKey, analytics, cmcd, offerId, adTagUrl, fail, failLimit, failLicense, refreshTracks, bindCueTrack, unbindCueTrack]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.loop = loop ?? false;

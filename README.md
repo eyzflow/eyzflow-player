@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.7.0
+npm install github:eyzflow/eyzflow-player#v0.8.0
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -39,6 +39,7 @@ export function Watch() {
 | `drmAuthorizationKey` | `string` | The viewer's authorization (`Bearer …`): DRM licences on protected streams, and the playback session with `storefrontId`. |
 | `storefrontId` | `string` | The storefront the viewer watches on. With it the player opens a playback session: the plan's stream and device limits apply, and the plan decides whether ads play. |
 | `deviceName` | `string` | Shown in the viewer's device list, e.g. "Living room". |
+| `offerId` | `string` | The offer (film or episode) `streamId` plays. With `drmAuthorizationKey` and `storefrontId`, the player reports the seconds watched for licensor royalties. See [Royalties](#royalties). |
 | `isProtected` | `boolean` | Overrides the config's DRM setting. |
 | `autoPlay` | `boolean` | Overrides the config's autoplay setting. |
 | `controls` | `boolean` | Overrides whether the control bar is shown. |
@@ -108,6 +109,29 @@ The intro, recap, opening and closing credits marked on a stream in the dashboar
 - `features.skipButtons: false` hides the button. The signal is still reported to `onSignal`.
 - `skipButtonTypes` picks the types with a button: `{ intro, recap, openingCredits, closingCredits }`, by default all but `closingCredits` (skipping the closing credits only ends the film; the end screen belongs there). Missing types keep the default.
 - `onSignal` gets `{ id, type, start, end, label }` when playback enters a signal (`type` is `intro`, `recap`, `opening_credits` or `closing_credits`), and `null` when it leaves.
+
+## Royalties
+
+Licensor royalties are counted from the seconds viewers watch. Give the player the viewer's authorization, the
+storefront and the offer, and it reports them itself:
+
+```tsx
+<EYZFlowPlayer
+  streamId={stream.id}
+  drmAuthorizationKey={`Bearer ${accessToken}`}
+  storefrontId={storefrontId}
+  offerId={stream.offer_id}
+/>
+```
+
+It sends `POST /v1/content/storefront/{storefrontId}/playback-events` every 30 s while the film plays, at once on a
+pause, at the end and when the page is hidden, and a last time when playback stops or the page closes. Only time spent
+playing the film counts: not ads, pauses, seeks or stalls. Each report carries the seconds since the previous one (at
+most 120) and one session id per playback; seconds a report could not deliver go with the next one. With
+`drm.parameters.catalogue_id` in the config, it is sent as well.
+
+Leave `offerId` out for trailers. A film the end screen picks reports nothing, since its offer is not known. An app
+that reports these events itself should stop doing so once it passes `offerId`, or the seconds are counted twice.
 
 ## End screen
 
