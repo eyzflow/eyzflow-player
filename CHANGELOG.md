@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Royalty usage (EYF-231): with `offerId`, `drmAuthorizationKey` and `storefrontId`, the player reports the seconds
+  the viewer watched to `playback-events` for licensor royalties: every 30 s while playing, on pause, at the end, when
+  the page is hidden and when playback stops. Ads, pauses, seeks and stalls don't count, and it works whether playback
+  analytics are on or not. Apps that send these events themselves should stop once they pass `offerId`.
+
 ## 0.7.0
 
 - Back and forward buttons (EYF-229): back, play/pause and forward in the middle of the player, as on iOS. They show
