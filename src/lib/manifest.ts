@@ -39,3 +39,9 @@ export async function probeKeySystems(nav: Navigator | undefined = typeof naviga
   const [widevine, playready, fairplay] = await Promise.all([has("widevine"), has("playready"), has("fairplay")]);
   return { widevine, playready, fairplay };
 }
+
+/** `#t=<seconds>` (a media fragment) so Safari's own HLS playback opens at the resume point; empty from the start. */
+export function startTimeFragment(startTime: number | null | undefined): string {
+  if (startTime == null || !Number.isFinite(startTime) || startTime <= 0) return "";
+  return `#t=${Math.floor(startTime)}`;
+}

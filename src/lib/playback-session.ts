@@ -64,9 +64,13 @@ function sessionsUrl(storefrontId: string, path = ""): string {
   return `${API}/v1/content/storefront/${encodeURIComponent(storefrontId)}/playback-sessions${path}`;
 }
 
-function headers(t: SessionTarget): Record<string, string> {
+/**
+ * The session request headers. Content-Type only with a JSON body: the API refuses an empty body sent as
+ * application/json (400), which failed every heartbeat and close.
+ */
+export function sessionHeaders(t: SessionTarget, { json = false }: { json?: boolean } = {}): Record<string, string> {
   return {
-    "Content-Type": "application/json",
+    ...(json ? { "Content-Type": "application/json" } : {}),
     Authorization: t.authorization,
     "X-Device-Id": t.deviceId,
   };
@@ -94,7 +98,7 @@ export async function openPlaybackSession(
 ): Promise<PlaybackSession> {
   const res = await fetch(sessionsUrl(t.storefrontId), {
     method: "POST",
-    headers: headers(t),
+    headers: sessionHeaders(t, { json: true }),
     body: JSON.stringify({ stream_id: t.streamId, platform: "web", device_name: t.deviceName }),
   });
   if (!res.ok) {
@@ -120,7 +124,7 @@ export async function openPlaybackSession(
 export async function heartbeatPlaybackSession(t: SessionTarget, sessionId: string): Promise<boolean> {
   const res = await fetch(sessionsUrl(t.storefrontId, `/${encodeURIComponent(sessionId)}/heartbeat`), {
     method: "POST",
-    headers: headers(t),
+    headers: sessionHeaders(t),
   });
   if (res.status === 401 || res.status === 404) return false;
   if (!res.ok) return true; // a passing network or server error: try again at the next beat
@@ -132,7 +136,7 @@ export async function heartbeatPlaybackSession(t: SessionTarget, sessionId: stri
 export function closePlaybackSession(t: SessionTarget, sessionId: string): void {
   void fetch(sessionsUrl(t.storefrontId, `/${encodeURIComponent(sessionId)}`), {
     method: "DELETE",
-    headers: headers(t),
+    headers: sessionHeaders(t),
     keepalive: true,
   }).catch(() => {});
 }

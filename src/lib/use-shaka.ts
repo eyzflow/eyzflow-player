@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadShaka } from "./shaka-loader";
 import { configureDrm } from "./drm";
-import { manifestFormatFor, probeKeySystems, streamManifestUrl } from "./manifest";
+import { manifestFormatFor, probeKeySystems, startTimeFragment, streamManifestUrl } from "./manifest";
 import { getDeviceId } from "./device";
 import {
   closePlaybackSession,
@@ -766,7 +766,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         // the licence server (Axinom) needs, and it answers 400. Safari's own HLS playback asks with the playlist's
         // skd:// URI, as the Bitmovin setup did.
         if (format === "hls") player.configure({ streaming: { useNativeHlsForFairPlay: true } });
-        await player.load(streamManifestUrl(streamId, format), startTime);
+        // Safari's HLS froze when sent to the resume point after the FairPlay keys arrived; it opens there itself
+        // when the address names the start time.
+        const nativeFairPlay = format === "hls";
+        const manifestUrl = streamManifestUrl(streamId, format) + (nativeFairPlay ? startTimeFragment(startTime) : "");
+        await player.load(manifestUrl, nativeFairPlay ? undefined : startTime);
         if (cancelled) return;
         const subtitleLanguage = prefs.preferredSubtitleLanguage;
         if (subtitleLanguage) {
