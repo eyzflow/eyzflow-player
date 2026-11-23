@@ -762,6 +762,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         // Safari's only DRM is FairPlay, whose key only the HLS playlists carry.
         const format = isProtected ? manifestFormatFor(true, await probeKeySystems()) : "dash";
         if (cancelled) return;
+        // Through MediaSource, Safari builds the FairPlay request from the segment's key info, without the skd:// asset id
+        // the licence server (Axinom) needs, and it answers 400. Safari's own HLS playback asks with the playlist's
+        // skd:// URI, as the Bitmovin setup did.
+        if (format === "hls") player.configure({ streaming: { useNativeHlsForFairPlay: true } });
         await player.load(streamManifestUrl(streamId, format), startTime);
         if (cancelled) return;
         const subtitleLanguage = prefs.preferredSubtitleLanguage;
