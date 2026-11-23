@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- Safari DRM (EYF-464): protected streams on Safari play through Safari's own HLS playback, so the FairPlay licence
+  request carries the playlist's `skd://` asset id. Through MediaSource the licence server refused it (Shaka error
+  6007). On Safari, protected streams don't apply `maxBitrate` there.
+
 ## 0.8.1
 
 - Safari DRM (EYF-464): protected streams play on Safari (macOS and iOS). Where FairPlay is the browser's only DRM, the
