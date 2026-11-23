@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadShaka } from "./shaka-loader";
 import { configureDrm } from "./drm";
-import { streamManifestUrl } from "./manifest";
+import { manifestFormatFor, probeKeySystems, streamManifestUrl } from "./manifest";
 import { getDeviceId } from "./device";
 import {
   closePlaybackSession,
@@ -759,7 +759,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       }
 
       try {
-        await player.load(streamManifestUrl(streamId), startTime);
+        // Safari's only DRM is FairPlay, whose key only the HLS playlists carry.
+        const format = isProtected ? manifestFormatFor(true, await probeKeySystems()) : "dash";
+        if (cancelled) return;
+        await player.load(streamManifestUrl(streamId, format), startTime);
         if (cancelled) return;
         const subtitleLanguage = prefs.preferredSubtitleLanguage;
         if (subtitleLanguage) {
