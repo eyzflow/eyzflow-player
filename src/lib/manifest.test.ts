@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { manifestFormatFor, probeKeySystems, streamManifestUrl } from "./manifest";
+import { manifestFormatFor, probeKeySystems, startTimeFragment, streamManifestUrl } from "./manifest";
 
 const safari = { widevine: false, playready: false, fairplay: true };
 const chrome = { widevine: true, playready: false, fairplay: false };
@@ -43,5 +43,17 @@ describe("probeKeySystems", () => {
 
   it("reports none without EME", async () => {
     expect(await probeKeySystems({} as Navigator)).toEqual({ widevine: false, playready: false, fairplay: false });
+  });
+});
+
+describe("startTimeFragment", () => {
+  it("names the resume point in whole seconds", () => {
+    expect(startTimeFragment(980.6)).toBe("#t=980");
+  });
+
+  it("is empty from the start or without a time", () => {
+    expect(startTimeFragment(0)).toBe("");
+    expect(startTimeFragment(undefined)).toBe("");
+    expect(startTimeFragment(Number.NaN)).toBe("");
   });
 });
