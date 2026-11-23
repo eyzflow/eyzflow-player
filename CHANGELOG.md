@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.3
+
+- Safari resume (EYF-464): a FairPlay film with a saved position opens there (`master.m3u8#t=<s>`) instead of
+  seeking once the keys arrive, which froze Safari's HLS playback.
+- Playback sessions: the heartbeat and the close no longer send `Content-Type: application/json` without a body. The
+  API refused them (400), so sessions went stale and a closed player kept counting against the plan's stream limit.
+
 ## 0.8.2
 
 - Safari DRM (EYF-464): protected streams on Safari play through Safari's own HLS playback, so the FairPlay licence
