@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- Safari DRM (EYF-464): protected streams play on Safari (macOS and iOS). Where FairPlay is the browser's only DRM, the
+  player loads the stream's HLS playlist (`master.m3u8`), which carries the FairPlay key; every other browser keeps
+  DASH (`manifest.mpd`), and clear streams always do.
+
 ## 0.8.0
 
 - Royalty usage (EYF-231): with `offerId`, `drmAuthorizationKey` and `storefrontId`, the player reports the seconds
