@@ -12,4 +12,4 @@ export const CONFIG_API_ORIGIN = origin(import.meta.env?.VITE_CONFIG_API_ORIGIN 
 export const STREAM_CDN_ORIGIN = origin(import.meta.env?.VITE_STREAM_CDN_ORIGIN as string | undefined, "https://stream.eyzflow.com");
 
 /** This player's version, sent with licence checks and analytics. */
-export const PLAYER_VERSION = "0.7.0";
+export const PLAYER_VERSION = "0.8.0";

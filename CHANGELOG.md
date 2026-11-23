@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 - Royalty usage (EYF-231): with `offerId`, `drmAuthorizationKey` and `storefrontId`, the player reports the seconds
   the viewer watched to `playback-events` for licensor royalties: every 30 s while playing, on pause, at the end, when
