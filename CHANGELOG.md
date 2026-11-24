@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Chromecast (EYF-478): stopping casting now keeps the subtitle (or subtitles off) and audio language last on on the
+  TV, whether the viewer picked them in the browser's menus or on the TV's own menu. Audio prefers the same label, so
+  German 5.1 stays German 5.1 where the film also has German stereo. A language the browser's stream lacks leaves the
+  browser's track as it was. Before, the browser went back to the tracks it had before casting.
+
 ## 0.9.1
 
 - Chromecast (EYF-477): a player config with no Cast receiver id now casts through the EYZFlow receiver (`A534F914`)

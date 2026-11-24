@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./EYZFlowPlayer.css";
 import { useShaka } from "../lib/use-shaka";
 import { useCast } from "../lib/use-cast";
+import { matchingTrack } from "../lib/media-tracks";
 import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
@@ -285,7 +286,18 @@ export function EYZFlowPlayer({
       poster: picked?.from === streamId ? picked.poster : poster,
     }),
     onStart: shaka.pause,
-    onEnd: (position, wasPlaying) => {
+    onEnd: (position, wasPlaying, tracks) => {
+      // The TV's last subtitle (or none) and audio carry back, so a switch made while casting stays.
+      if (tracks) {
+        if (!tracks.text) {
+          if (shaka.captionsVisible) shaka.disableCaptions();
+        } else {
+          const text = matchingTrack(shaka.textTracks, tracks.text);
+          if (text && (!shaka.captionsVisible || text.id !== shaka.activeTextTrack?.id)) shaka.selectTextTrack(text);
+        }
+        const audio = tracks.audio && matchingTrack(shaka.audioOptions, tracks.audio);
+        if (audio && audio.id !== shaka.activeAudio?.id) shaka.selectAudio(audio);
+      }
       shaka.seek(position);
       if (wasPlaying) shaka.play();
     },

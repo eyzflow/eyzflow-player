@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   audioOptionsFrom,
   castAudioOptions,
+  castHandback,
   castTextTracks,
   castTrackForLanguage,
+  matchingTrack,
   shakaAudioTrackFor,
   withActiveTrack,
   type CastTrack,
@@ -93,5 +95,45 @@ describe("castTrackForLanguage", () => {
     ];
     expect(castTrackForLanguage(tracks, "AUDIO", "de", "German 5.1")?.trackId).toBe(2);
     expect(castTrackForLanguage(tracks, "AUDIO", "de", "Commentary")?.trackId).toBe(1);
+  });
+});
+
+describe("castHandback", () => {
+  it("hands back the TV's subtitle and audio", () => {
+    expect(castHandback(castTracks, [1, 2, 5])).toEqual({
+      text: { language: "en-US", label: null },
+      audio: { language: "de", label: "Deutsch" },
+    });
+  });
+  it("hands back subtitles off when none is active", () => {
+    expect(castHandback(castTracks, [3])).toEqual({ text: null, audio: { language: "en", label: null } });
+  });
+  it("leaves the audio to the browser when the TV names none", () => {
+    expect(castHandback(castTracks, [4])?.audio).toBeNull();
+  });
+  it("hands back nothing when the TV reported no tracks", () => {
+    expect(castHandback([], [])).toBeNull();
+    expect(castHandback([{ trackId: 1, type: "VIDEO" }], [1])).toBeNull();
+  });
+});
+
+describe("matchingTrack", () => {
+  const options = [
+    { id: "de|German stereo", language: "de", label: "German stereo" },
+    { id: "de|German 5.1", language: "de", label: "German 5.1" },
+    { id: "en|", language: "en", label: null },
+  ];
+  it("prefers the same label, then the language ignoring region", () => {
+    expect(matchingTrack(options, { language: "de", label: "German 5.1" })?.id).toBe("de|German 5.1");
+    expect(matchingTrack(options, { language: "de-DE", label: "Commentary" })?.id).toBe("de|German stereo");
+    expect(matchingTrack(options, { language: "en-US", label: null })?.id).toBe("en|");
+  });
+  it("finds nothing for a language the browser's stream lacks", () => {
+    expect(matchingTrack(options, { language: "fr", label: null })).toBeNull();
+  });
+  it("matches the browser's subtitle tracks to the TV's", () => {
+    const { tracks } = castTextTracks(castTracks, []);
+    const handback = castHandback(castTracks, [4]);
+    expect(matchingTrack(tracks, handback!.text!)?.id).toBe(4);
   });
 });
