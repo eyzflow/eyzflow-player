@@ -24,6 +24,15 @@ export type ShakaTextTrack = {
   mimeType: string | null;
 };
 
+/** An audio track (shaka.extern.AudioTrack), the part the player reads. */
+export type ShakaAudioTrack = {
+  active: boolean;
+  language: string;
+  label: string | null;
+  channelsCount: number | null;
+  roles: string[];
+};
+
 export type ShakaNetworkingEngine = {
   registerRequestFilter: (
     fn: (type: number, request: { headers: Record<string, string> }) => void,
@@ -44,6 +53,8 @@ export type ShakaPlayerApi = {
   selectVariantTrack: (track: ShakaTrack, clearBuffer?: boolean) => void;
   /** Selecting a track shows it; passing null unloads/hides text. */
   selectTextTrack: (track: ShakaTextTrack | null) => void;
+  getAudioTracks?: () => ShakaAudioTrack[];
+  selectAudioTrack?: (track: ShakaAudioTrack) => void;
   isLive?: () => boolean;
   /** The key system in use once a licence was asked for (e.g. "com.widevine.alpha"). */
   drmInfo?: () => { keySystem?: string } | null;

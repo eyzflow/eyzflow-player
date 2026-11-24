@@ -66,7 +66,7 @@ See [`sample-config.json`](sample-config.json) for the shape of a player config.
 
 ## Controls
 
-The control bar follows the layout viewers know from YouTube: a thin seek bar in the theme's `accentColor` with a time tooltip (or the thumbnail) on hover, then play, volume (the slider slides out on hover) and time on the left, and subtitles, settings, picture in picture, AirPlay, cast and fullscreen on the right. The settings menu holds Subtitles/CC, Playback speed (0.25–2×) and Quality; `features.captions` and `features.qualitySelector` hide their entries.
+The control bar follows the layout viewers know from YouTube: a thin seek bar in the theme's `accentColor` with a time tooltip (or the thumbnail) on hover, then play, volume (the slider slides out on hover) and time on the left, and subtitles, settings, picture in picture, AirPlay, cast and fullscreen on the right. The settings menu holds Subtitles/CC, Audio (when the film has more than one language), Playback speed (0.25–2×) and Quality; `features.captions` and `features.qualitySelector` hide their entries.
 
 Back, play/pause and forward buttons sit in the middle of the player, as on iOS, and show and hide with the control bar; `features.seekButtons: false` turns them off.
 
@@ -101,6 +101,15 @@ With `features.ads` on and an `ads.adTagUrl` in the player config, the player pl
 - **Who:** for a storefront viewer (`storefrontId` and `drmAuthorizationKey`), the playback session says whether their plan includes ads; with a plan without ads, no ad request is made. Its targeting values (`plan`, `access`) go into the tag's `cust_params`.
 - **Countdown:** "Ad in 5" … "Ad in 1" before each mid-roll, in English, German, French or Dutch. `features.adCountdown: false` turns it off; `ads.countdownSeconds` (1–30, default 5) sets its length.
 - Ads don't play while casting or on AirPlay, and a tag that fails or returns no ad plays the content without an error.
+
+## Chromecast
+
+With `features.chromecast` on, Chrome and Edge show a Cast button. Casting plays the film on the TV through the
+receiver app in `cast.receiverAppId` (the EYZFlow receiver, `https://stream.eyzflow.com/cast/index.html`, which adds
+the DRM `access-token` to the licence request; without an id, Google's default receiver plays clear streams only). The
+TV starts where the viewer is, with the subtitle and audio language on in the browser. While casting, the controls,
+Subtitles/CC and Audio drive the TV; stopping casting resumes in the browser at the TV's position. Watch time on the
+TV is not counted in analytics or royalty usage.
 
 ## Skip intro, recap and credits
 

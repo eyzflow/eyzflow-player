@@ -1,5 +1,6 @@
 import type { ShakaTrack, ShakaTextTrack, ShakaThumbnail } from "../../lib/shaka-types";
-import type { PlayerCastConfig, PlayerFeatures } from "../../lib/config-types";
+import type { PlayerFeatures } from "../../lib/config-types";
+import type { AudioOption } from "../../lib/media-tracks";
 import { PlayPauseButton } from "./PlayPauseButton";
 import { SeekBar } from "./SeekBar";
 import { TimeDisplay } from "./TimeDisplay";
@@ -23,8 +24,11 @@ type Props = {
   textTracks: ShakaTextTrack[];
   activeTextTrack: ShakaTextTrack | null;
   captionsVisible: boolean;
+  audioOptions: AudioOption[];
+  activeAudio: AudioOption | null;
   features: PlayerFeatures;
-  castConfig?: PlayerCastConfig;
+  /** The Cast button: shown once a Cast device can be picked. */
+  cast?: { available: boolean; casting: boolean; deviceName: string | null; onToggle: () => void };
   videoRef: React.RefObject<HTMLVideoElement | null>;
   containerRef: React.RefObject<HTMLDivElement | null>;
   onPlay: () => void;
@@ -35,6 +39,7 @@ type Props = {
   onSelectTrack: (t: ShakaTrack) => void;
   onSelectTextTrack: (t: ShakaTextTrack) => void;
   onCaptionsOff: () => void;
+  onSelectAudio: (option: AudioOption) => void;
   onToggleCaptions: () => void;
   onMenuOpenChange?: (open: boolean) => void;
   /** The seek bar preview at a time; absent without a thumbnails track. */
@@ -45,11 +50,12 @@ export function ControlBar({
   playing, currentTime, duration, buffered,
   volume, muted,
   tracks, activeTrack, textTracks, activeTextTrack, captionsVisible,
-  features, castConfig,
+  audioOptions, activeAudio,
+  features, cast,
   videoRef, containerRef,
   onPlay, onPause, onSeek,
   onVolume, onMute,
-  onSelectTrack, onSelectTextTrack, onCaptionsOff, onToggleCaptions,
+  onSelectTrack, onSelectTextTrack, onCaptionsOff, onSelectAudio, onToggleCaptions,
   onMenuOpenChange,
   getThumbnail,
 }: Props) {
@@ -73,16 +79,23 @@ export function ControlBar({
             textTracks={textTracks}
             activeTextTrack={activeTextTrack}
             captionsVisible={captionsVisible}
-            showQuality={features.qualitySelector}
+            audioOptions={audioOptions}
+            activeAudio={activeAudio}
+            // Quality and speed belong to the video in this browser; the TV picks its own.
+            showQuality={features.qualitySelector && !cast?.casting}
+            showSpeed={!cast?.casting}
             showSubtitles={features.captions}
             onSelectTrack={onSelectTrack}
             onSelectTextTrack={onSelectTextTrack}
             onCaptionsOff={onCaptionsOff}
+            onSelectAudio={onSelectAudio}
             onOpenChange={onMenuOpenChange}
           />
           {features.pip && <PipButton videoRef={videoRef} />}
           {features.airplay && <AirPlayButton videoRef={videoRef} />}
-          {features.chromecast && <CastButton videoRef={videoRef} castConfig={castConfig} />}
+          {features.chromecast && cast?.available && (
+            <CastButton casting={cast.casting} deviceName={cast.deviceName} onClick={cast.onToggle} />
+          )}
           <FullscreenButton containerRef={containerRef} />
         </div>
       </div>

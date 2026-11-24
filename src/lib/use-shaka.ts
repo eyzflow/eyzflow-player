@@ -14,6 +14,8 @@ import {
 } from "./playback-session";
 import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaThumbnail, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
 import { audioPreference, bitrateRestrictions, matchesLanguage } from "./playback-preferences";
+import { audioOptionsFrom, shakaAudioTrackFor, type AudioOption } from "./media-tracks";
+import { buildAccessToken } from "./drm";
 import { loadIma } from "./ima-loader";
 import { AdBreakSchedule } from "./ad-breaks";
 import { SignalSchedule, type SignalRegionLike, type StreamSignal } from "./stream-signals";
@@ -114,6 +116,16 @@ export type UseShakaReturn = {
   textTracks: ShakaTextTrack[];
   activeTextTrack: ShakaTextTrack | null;
   captionsVisible: boolean;
+  /** The film's audio languages (one per language and label). */
+  audioOptions: AudioOption[];
+  activeAudio: AudioOption | null;
+  /**
+   * The DRM `access-token` header this browser plays with now (device, playback session, player token), for a Cast
+   * receiver to ask for the licence as this viewer. Null for a clear stream or before the stream loads.
+   */
+  castAccessToken: () => string | null;
+  /** The stream id whose load finished (null while one loads): a Cast receiver gets the stream only then. */
+  loadedStreamId: string | null;
   /** Text lines of the currently active subtitle cues, for custom rendering. */
   activeCueLines: string[];
   /** The intro, recap or credits signal playback is in, if any. */
@@ -138,6 +150,7 @@ export type UseShakaReturn = {
   selectTextTrack: (track: ShakaTextTrack) => void;
   disableCaptions: () => void;
   toggleCaptions: () => void;
+  selectAudio: (option: AudioOption) => void;
   /** The seek bar preview at `time`, or null when the stream has no thumbnails track. */
   getThumbnail: (time: number) => Promise<ShakaThumbnail | null>;
   hasThumbnails: boolean;
@@ -182,6 +195,11 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
   const [textTracks, setTextTracks] = useState<ShakaTextTrack[]>([]);
   const [activeTextTrack, setActiveTextTrack] = useState<ShakaTextTrack | null>(null);
   const [captionsVisible, setCaptionsVisible] = useState(false);
+  const [audioOptions, setAudioOptions] = useState<AudioOption[]>([]);
+  const [activeAudio, setActiveAudio] = useState<AudioOption | null>(null);
+  // Builds the licence header the way the request filter does, for the Cast receiver.
+  const accessTokenRef = useRef<(() => string) | null>(null);
+  const [loadedStreamId, setLoadedStreamId] = useState<string | null>(null);
   const [activeCueLines, setActiveCueLines] = useState<string[]>([]);
   const [activeSignal, setActiveSignal] = useState<StreamSignal | null>(null);
   const [ended, setEnded] = useState(false);
@@ -305,6 +323,9 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const active = tt.find((t) => t.active) ?? null;
     setActiveTextTrack(active);
     setCaptionsVisible(active != null);
+    const audio = audioOptionsFrom(p.getAudioTracks?.() ?? []);
+    setAudioOptions(audio.options);
+    setActiveAudio(audio.active);
   }, []);
 
   useEffect(() => {
@@ -652,6 +673,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
       player.addEventListener("trackschanged", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("adaptation", () => { if (!cancelled) refreshTracks(); });
+      player.addEventListener("variantchanged", () => { if (!cancelled) refreshTracks(); });
       player.addEventListener("textchanged", () => { if (!cancelled) refreshTracks(); });
       // Shaka reports the manifest's events while loading it, before load() resolves.
       player.addEventListener("timelineregionadded", onRegionAdded);
@@ -750,9 +772,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
           }
         }
         if (isProtected) {
-          configureDrm(player, shaka, streamId, drmAuthorizationKey, () =>
-            license ? { ...parameters, player_token: license.token } : parameters,
-          );
+          const licenceParameters = () => (license ? { ...parameters, player_token: license.token } : parameters);
+          configureDrm(player, shaka, streamId, drmAuthorizationKey, licenceParameters);
+          const authorization = drmAuthorizationKey;
+          accessTokenRef.current = () => buildAccessToken(authorization, licenceParameters());
         }
       }
 
@@ -770,6 +793,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         const manifestUrl = streamManifestUrl(streamId, format) + (nativeFairPlay ? startTimeFragment(startTime) : "");
         await player.load(manifestUrl, nativeFairPlay ? undefined : startTime);
         if (cancelled) return;
+        setLoadedStreamId(streamId);
         const subtitleLanguage = prefs.preferredSubtitleLanguage;
         if (subtitleLanguage) {
           const track = player.getTextTracks().find((t) => matchesLanguage(t.language, subtitleLanguage));
@@ -819,6 +843,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
 
     return () => {
       cancelled = true;
+      accessTokenRef.current = null;
+      setLoadedStreamId(null);
       window.removeEventListener("pagehide", endSession);
       endSession();
       endAds();
@@ -905,6 +931,14 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     setActiveTextTrack(null);
     unbindCueTrack();
   }, [unbindCueTrack]);
+  const selectAudio = useCallback((option: AudioOption) => {
+    const p = playerRef.current;
+    const track = p?.getAudioTracks && shakaAudioTrackFor(p.getAudioTracks(), option);
+    if (!p?.selectAudioTrack || !track) return;
+    p.selectAudioTrack(track);
+    setActiveAudio(option);
+  }, []);
+  const castAccessToken = useCallback(() => accessTokenRef.current?.() ?? null, []);
   const getThumbnail = useCallback(async (time: number) => {
     const p = playerRef.current;
     const trackId = thumbnailsTrackRef.current;
@@ -946,6 +980,10 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     textTracks,
     activeTextTrack,
     captionsVisible,
+    audioOptions,
+    activeAudio,
+    castAccessToken,
+    loadedStreamId,
     activeCueLines,
     activeSignal,
     skipSignal,
@@ -961,6 +999,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     selectTextTrack,
     disableCaptions,
     toggleCaptions,
+    selectAudio,
     getThumbnail,
     hasThumbnails,
   };

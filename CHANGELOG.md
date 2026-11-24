@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Chromecast (EYF-475): the Cast button now plays the film on the TV. It sends the EYZFlow receiver the stream's DASH
+  manifest, the Widevine licence URL and the browser's `access-token`, from where the viewer is, with the subtitle and
+  audio language on in the browser. While casting, play, pause, seek, volume and the time drive the TV, and the
+  Subtitles/CC and Audio menus list the TV's tracks and switch them there. Stopping casting resumes in the browser at
+  the TV's position. Before, the button only opened a Cast session, so nothing played and the menus kept switching
+  the browser's video.
+- Audio menu: the settings menu has an Audio entry when the film has more than one audio language. Picking a quality
+  keeps the audio language.
 - Error messages (EYF-472): the error screen and `onError` name EYZFlow Player and the error code
   (`EYZFlow Player error 1001`) instead of passing on Shaka's own text (`Playback error 1001: Shaka Error 1001`). If
   the player library can't load, viewers see `EYZFlow Player couldn't start.` Analytics still record the full error.

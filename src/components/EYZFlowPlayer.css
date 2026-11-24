@@ -489,6 +489,26 @@
    player is always hovered, and Chrome keeps a mouse-focused <select> in
    :focus-visible — either rule would pin the controls forever. */
 
+/* ── Casting ──
+   The TV plays: the browser's video stands still behind a dark layer that
+   names the device. Clicks pass through to the click layer (play/pause). */
+.eyz-casting {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.72);
+  color: var(--eyz-text);
+  font-size: 15px;
+  text-align: center;
+  padding: 0 16px;
+}
+
 /* ── Subtitles ──
    Cues come from the hidden native text track and are rendered by the
    player itself. The layer sits below the controls (z-index) and its
