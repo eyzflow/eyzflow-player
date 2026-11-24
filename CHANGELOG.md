@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+- Watch progress (EYF-493): with `catalogueId`, the player saves where the viewer is for "Continue watching". With
+  `drmAuthorizationKey` and `storefrontId` it sends `PUT /watch-history` itself: at most every 10 s while playing, at
+  once on a pause or a seek, when the page is hidden or closes, and as completed at the end (or from the last 5 %).
+  While casting, the TV's position is saved. Ads save nothing, and nothing is saved before playback reaches
+  `startTime`. `watchProgressStore` sends it to the app's own store instead, as on iOS and Flutter; `null` turns it
+  off. Apps that save progress themselves should stop once they pass `catalogueId`.
+
 ## 0.9.2
 
 - Chromecast (EYF-478): stopping casting now keeps the subtitle (or subtitles off) and audio language last on on the

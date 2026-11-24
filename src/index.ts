@@ -20,3 +20,5 @@ export type {
   EndScreenSelectContext,
   PlayerEndScreenConfig,
 } from "./lib/end-screen";
+export { eyzflowWatchHistoryStore } from "./lib/watch-progress";
+export type { EYZFlowWatchHistoryTarget, WatchProgress, WatchProgressStore } from "./lib/watch-progress";

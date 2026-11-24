@@ -2,6 +2,7 @@ import { EYZFlowPlayer } from "../components/EYZFlowPlayer";
 import { DEFAULT_FEATURES, type PlayerConfig } from "../lib/config-types";
 import type { SignalOverlayContext } from "../lib/signal-overlay";
 import type { EndScreenOptions } from "../lib/end-screen";
+import type { WatchProgressStore } from "../lib/watch-progress";
 
 export function PlayerPage() {
   const params = new URLSearchParams(window.location.search);
@@ -20,6 +21,11 @@ export function PlayerPage() {
   const endScreenDemo = params.get("endScreenDemo") === "1";
   // The Cast receiver to try without a remote config (e.g. A534F914, the EYZFlow receiver, for protected streams).
   const castAppId = params.get("castAppId");
+  // Watch progress: `catalogueId` saves it (to the EYZFlow watch history with `drmKey` and `storefrontId`);
+  // `progressLog=1` logs the saves to the console instead. `startTime` is the resume point.
+  const catalogueId = params.get("catalogueId") ?? undefined;
+  const startTime = params.has("startTime") ? Number(params.get("startTime")) : undefined;
+  const progressLog = params.get("progressLog") === "1" ? loggingProgressStore : undefined;
   const config: Partial<PlayerConfig> | undefined =
     adTag || castAppId
       ? {
@@ -60,6 +66,10 @@ export function PlayerPage() {
         poster={params.get("poster") ?? undefined}
         storefrontId={storefrontId}
         autoPlay={autoPlay}
+        isProtected={params.get("protected") === "false" ? false : undefined}
+        catalogueId={catalogueId}
+        watchProgressStore={progressLog}
+        startTime={startTime}
         renderOverlay={overlayDemo ? similarFilms : undefined}
         endScreen={endScreenDemo ? demoEndScreen(streamId) : undefined}
         fill
@@ -67,6 +77,11 @@ export function PlayerPage() {
     </div>
   );
 }
+
+/** Logs each watch progress save instead of sending it. */
+const loggingProgressStore: WatchProgressStore = {
+  save: (progress, { final }) => console.info("[demo] watch progress", JSON.stringify({ ...progress, final })),
+};
 
 /** The overlay example: three cards at the closing credits or after the film ended. */
 function similarFilms({ signal, ended, controls }: SignalOverlayContext) {

@@ -20,6 +20,7 @@ import { STREAM_CDN_ORIGIN } from "../lib/api";
 import { defaultThumbnailsUrl } from "../lib/playback-preferences";
 import { seekSteps as resolveSeekSteps, type PlayerSeekConfig } from "../lib/seek-steps";
 import { SeekButtons, SeekIcon } from "./controls/SeekButtons";
+import { eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgressStore } from "../lib/watch-progress";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -77,6 +78,17 @@ export type EYZFlowPlayerProps = {
    * the seconds the viewer watched for licensor royalties. Leave it out for trailers.
    */
   offerId?: string;
+  /**
+   * The catalogue entry (film or episode) `streamId` plays. With it the player saves the viewer's position for
+   * "Continue watching": to `watchProgressStore`, or else, with `drmAuthorizationKey` and `storefrontId`, to the EYZFlow
+   * watch history. Leave it out for trailers.
+   */
+  catalogueId?: string;
+  /**
+   * Where watch progress goes instead of the EYZFlow watch history, e.g. the app's own backend. `null` saves nothing.
+   * Needs `catalogueId`.
+   */
+  watchProgressStore?: WatchProgressStore | null;
   /** A stream or device limit was reached, or the viewer was signed out on this device. */
   onLimitReached?: (limit: PlaybackLimitError) => void;
   /** Override isProtected (default comes from config) */
@@ -154,6 +166,8 @@ export function EYZFlowPlayer({
   storefrontId,
   deviceName,
   offerId,
+  catalogueId,
+  watchProgressStore,
   onLimitReached,
   isProtected: isProtectedProp,
   autoPlay: autoPlayProp,
@@ -229,6 +243,60 @@ export function EYZFlowPlayer({
         ? thumbnails
         : defaultThumbnailsUrl(STREAM_CDN_ORIGIN, playingStreamId);
 
+  // Watch progress ("Continue watching") of the app's film. A film the end screen picked is another entry: not saved.
+  const recordingCatalogueId = playingStreamId === streamId ? catalogueId : undefined;
+  const watchStorefrontId = typeof mergedDrmParameters?.storefront_id === "string" ? mergedDrmParameters.storefront_id : undefined;
+  const progressStoreRef = useRef<WatchProgressStore | null>(null);
+  const startTimeRef = useRef(startTime);
+  const appCallbacks = useRef({ onTimeUpdate, onPause, onSeeked, onEnded });
+  // Before the effects below, so a recorder made in the same commit already sees them.
+  useEffect(() => {
+    progressStoreRef.current =
+      watchProgressStore !== undefined
+        ? watchProgressStore
+        : drmAuthorizationKey && watchStorefrontId
+          ? eyzflowWatchHistoryStore({ storefrontId: watchStorefrontId, authorization: drmAuthorizationKey })
+          : null;
+    startTimeRef.current = startTime;
+    appCallbacks.current = { onTimeUpdate, onPause, onSeeked, onEnded };
+  });
+  const recorderRef = useRef<WatchProgressRecorder | null>(null);
+  useEffect(() => {
+    if (!recordingCatalogueId) return;
+    const recorder = new WatchProgressRecorder({
+      catalogueId: recordingCatalogueId,
+      offerId,
+      store: () => progressStoreRef.current,
+      startTime: startTimeRef.current,
+    });
+    recorderRef.current = recorder;
+    recorder.start();
+    return () => {
+      recorder.stop();
+      if (recorderRef.current === recorder) recorderRef.current = null;
+    };
+  }, [streamId, recordingCatalogueId, offerId]);
+
+  // The player's events reach the recorder and then the app; none fire during an ad.
+  const handleTimeUpdate = useCallback((time: number, total: number) => {
+    recorderRef.current?.report(time, total);
+    appCallbacks.current.onTimeUpdate?.(time, total);
+  }, []);
+  const handlePause = useCallback((time: number) => {
+    recorderRef.current?.checkpoint(time);
+    appCallbacks.current.onPause?.(time);
+  }, []);
+  const loadedRef = useRef(false);
+  const handleSeeked = useCallback((time: number) => {
+    // The player's own move to the start position is not the viewer seeking.
+    if (loadedRef.current) recorderRef.current?.seeked(time);
+    appCallbacks.current.onSeeked?.(time);
+  }, []);
+  const handleEnded = useCallback(() => {
+    recorderRef.current?.finish();
+    appCallbacks.current.onEnded?.();
+  }, []);
+
   const shaka = useShaka({
     streamId: playingStreamId,
     // The <video> only renders once the remote config is in.
@@ -262,11 +330,17 @@ export function EYZFlowPlayer({
     // A custom track belongs to the app's stream, not to one the end screen picked.
     thumbnailsUrl: typeof thumbnails === "string" && playingStreamId !== streamId ? undefined : thumbnailsUrl,
     startTime: playingStreamId === streamId ? startTime : undefined,
-    onTimeUpdate,
-    onPause,
-    onSeeked,
-    onEnded,
+    onTimeUpdate: handleTimeUpdate,
+    onPause: handlePause,
+    onSeeked: handleSeeked,
+    onEnded: handleEnded,
   });
+  const loaded = shaka.state === "ready";
+  useEffect(() => {
+    loadedRef.current = loaded;
+    // Each load starts over from `startTime` (a new token reloads the stream): not the viewer's position until it's there.
+    if (!loaded) recorderRef.current?.reload();
+  }, [loaded]);
 
   // Chromecast: while a session is open the TV plays, and the controls below drive it instead of the <video>.
   const cast = useCast({
@@ -316,14 +390,10 @@ export function EYZFlowPlayer({
     if (casting && localPlaying) pauseLocal();
   }, [casting, localPlaying, pauseLocal]);
 
-  // The app hears where the TV is while casting, as it does from the <video> (e.g. to keep a resume point).
-  const onTimeUpdateRef = useRef(onTimeUpdate);
+  // Where the TV is while casting is saved, and the app hears it, as from the <video> (e.g. to keep a resume point).
   useEffect(() => {
-    onTimeUpdateRef.current = onTimeUpdate;
-  });
-  useEffect(() => {
-    if (casting && cast.currentTime > 0) onTimeUpdateRef.current?.(cast.currentTime, cast.duration);
-  }, [casting, cast.currentTime, cast.duration]);
+    if (casting && cast.currentTime > 0) handleTimeUpdate(cast.currentTime, cast.duration);
+  }, [casting, cast.currentTime, cast.duration, handleTimeUpdate]);
 
   // The app's overlay: asked for at a signal or after the end, until dismissed for that moment.
   const moment = overlayMoment(activeSignal, ended);
