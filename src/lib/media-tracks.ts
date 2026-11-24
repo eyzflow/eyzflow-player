@@ -93,3 +93,34 @@ export function castTrackForLanguage(
   const inLanguage = tracks.filter((t) => t.type === type && matchesLanguage(t.language, language));
   return (label && inLanguage.find((t) => t.name === label)) || inLanguage[0] || null;
 }
+
+/** A subtitle or audio track by its language and label, as the TV last played it. */
+export type TrackChoice = { language: string; label: string | null };
+
+/**
+ * The TV's subtitle and audio when casting ends, for the browser to take over. `text` is null when the TV had
+ * subtitles off; `audio` is null when the TV named no audio track (the browser keeps its own).
+ */
+export type CastHandback = { text: TrackChoice | null; audio: TrackChoice | null };
+
+/**
+ * The TV's active subtitle and audio from its last status, or null when it reported no tracks (nothing to hand back).
+ * A subtitle track on without a language can't be matched, so the browser keeps its own then.
+ */
+export function castHandback(tracks: CastTrack[], activeIds: number[]): CastHandback | null {
+  if (!tracks.some((t) => isText(t) || isAudio(t))) return null;
+  const choice = (t: CastTrack | undefined): TrackChoice | null =>
+    t?.language ? { language: t.language, label: t.name || null } : null;
+  const text = tracks.find((t) => isText(t) && activeIds.includes(t.trackId));
+  if (text && !text.language) return null;
+  return { text: choice(text), audio: choice(tracks.find((t) => isAudio(t) && activeIds.includes(t.trackId))) };
+}
+
+/**
+ * The browser's track (a Shaka subtitle track or an audio option) for the TV's choice: the one with the same label
+ * first (a film can have stereo and 5.1 in one language), else the first in the language, else null.
+ */
+export function matchingTrack<T extends { language: string; label: string | null }>(tracks: T[], choice: TrackChoice): T | null {
+  const inLanguage = tracks.filter((t) => matchesLanguage(t.language, choice.language));
+  return (choice.label && inLanguage.find((t) => t.label === choice.label)) || inLanguage[0] || null;
+}

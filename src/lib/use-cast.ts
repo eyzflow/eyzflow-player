@@ -12,10 +12,12 @@ import {
 } from "./cast-sender";
 import {
   castAudioOptions,
+  castHandback,
   castTextTracks,
   castTrackForLanguage,
   withActiveTrack,
   type AudioOption,
+  type CastHandback,
   type CastTrack,
 } from "./media-tracks";
 import type { ShakaTextTrack } from "./shaka-types";
@@ -47,8 +49,11 @@ export type UseCastOptions = {
   start: () => CastStart;
   /** Casting started: the browser's video stops. */
   onStart?: () => void;
-  /** Casting ended, with where the TV was and whether it played: the browser takes over there. */
-  onEnd?: (position: number, playing: boolean) => void;
+  /**
+   * Casting ended, with where the TV was, whether it played and its last subtitle and audio (null when the TV reported
+   * no tracks): the browser takes over there.
+   */
+  onEnd?: (position: number, playing: boolean, tracks: CastHandback | null) => void;
 };
 
 export type UseCastReturn = {
@@ -110,6 +115,8 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
   const carryRef = useRef<{ text: string | null; audio: string | null; audioLabel: string | null } | null>(null);
   // The TV's last position and play state, for handing back when the session ends (the remote player resets then).
   const lastRef = useRef({ time: 0, playing: false });
+  // The TV's tracks and the ones on, from its last status (or the viewer's last switch), handed back the same way.
+  const lastTracksRef = useRef<{ tracks: CastTrack[]; ids: number[] }>({ tracks: [], ids: [] });
   // The subtitle track the viewer last had on, for the captions button.
   const lastTextRef = useRef<number | null>(null);
   // A LOAD is on its way to the TV (its stream id).
@@ -131,6 +138,7 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     const remote = remoteRef.current;
     if (!media || !remote) return;
     setActiveIds(ids);
+    lastTracksRef.current = { ...lastTracksRef.current, ids };
     media.editTracksInfo(new remote.sdk.media.EditTracksInfoRequest(ids), () => {}, (error) => log("switching tracks failed", error));
   }, []);
 
@@ -162,6 +170,9 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     }
     setTracks(t);
     setActiveIds(ids);
+    // Kept only once the TV plays with the browser's languages applied: a load that fails, or the media that was on
+    // the TV before, hands nothing back.
+    if (t.length > 0 && started && !carryRef.current && !loadingRef.current) lastTracksRef.current = { tracks: t, ids };
     if (player.isMediaLoaded) {
       if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
       loadTimerRef.current = null;
@@ -193,6 +204,7 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     setCurrentTime(from.startTime);
     setTracks([]);
     setActiveIds([]);
+    lastTracksRef.current = { tracks: [], ids: [] };
     if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
     loadTimerRef.current = setTimeout(() => {
       loadTimerRef.current = null;
@@ -258,6 +270,7 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
         if (!session) return;
         const from = startRef.current();
         lastRef.current = { time: from.startTime, playing: from.playing };
+        lastTracksRef.current = { tracks: [], ids: [] };
         setDeviceName(session.getCastDevice().friendlyName ?? null);
         onStartRef.current?.();
         // A resumed session (a reload) may already play this stream: take it as it is. Otherwise the effect below
@@ -279,7 +292,9 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
         setDeviceName(null);
         setTracks([]);
         setActiveIds([]);
-        onEndRef.current?.(lastRef.current.time, lastRef.current.playing);
+        const { tracks: lastTracks, ids: lastIds } = lastTracksRef.current;
+        lastTracksRef.current = { tracks: [], ids: [] };
+        onEndRef.current?.(lastRef.current.time, lastRef.current.playing, castHandback(lastTracks, lastIds));
       };
       const onSession = (event: { sessionState: string }) => {
         const { SessionState } = framework;
