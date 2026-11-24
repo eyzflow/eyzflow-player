@@ -2,8 +2,17 @@ import { API_ORIGIN } from "./api";
 import { streamManifestUrl } from "./manifest";
 import type { CastTrack } from "./media-tracks";
 
-/** Google's Default Media Receiver: plays clear streams only, since it can't send the DRM access token. */
-export const DEFAULT_RECEIVER_APP_ID = "CC1AD845";
+/**
+ * The EYZFlow receiver (https://stream.eyzflow.com/cast/index.html), used when a player config names none. It adds the
+ * DRM access token to the licence request, so protected films play as well as clear trailers. Google's Default Media
+ * Receiver (CC1AD845) can't, so protected films failed on it.
+ */
+export const DEFAULT_RECEIVER_APP_ID = "A534F914";
+
+/** The receiver app a config casts to: its own id, else the EYZFlow receiver. */
+export function castReceiverAppId(config: { receiverAppId?: string | null } | null | undefined): string {
+  return config?.receiverAppId?.trim() || DEFAULT_RECEIVER_APP_ID;
+}
 
 /** The DASH manifest's type: the EYZFlow receiver plays DASH with Widevine, as the web player does. */
 const DASH = "application/dash+xml";
