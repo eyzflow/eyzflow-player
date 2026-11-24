@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.9.2
+npm install github:eyzflow/eyzflow-player#v0.10.0
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -40,6 +40,8 @@ export function Watch() {
 | `storefrontId` | `string` | The storefront the viewer watches on. With it the player opens a playback session: the plan's stream and device limits apply, and the plan decides whether ads play. |
 | `deviceName` | `string` | Shown in the viewer's device list, e.g. "Living room". |
 | `offerId` | `string` | The offer (film or episode) `streamId` plays. With `drmAuthorizationKey` and `storefrontId`, the player reports the seconds watched for licensor royalties. See [Royalties](#royalties). |
+| `catalogueId` | `string` | The catalogue entry (film or episode) `streamId` plays. With it the player saves the viewer's position for "Continue watching". See [Watch progress](#watch-progress). |
+| `watchProgressStore` | `WatchProgressStore \| null` | Where watch progress goes instead of the EYZFlow watch history. `null` saves nothing. |
 | `isProtected` | `boolean` | Overrides the config's DRM setting. |
 | `autoPlay` | `boolean` | Overrides the config's autoplay setting. |
 | `controls` | `boolean` | Overrides whether the control bar is shown. |
@@ -190,6 +192,53 @@ Pass the films and the player does the rest: at the closing credits "Up next" sh
 - `controls` has `skip()`, `seek(seconds)`, `play()`, `pause()` and `dismiss()`. `dismiss()` hides it until playback enters another signal or the film ends.
 - While it shows, the skip button hides. Nothing shows during an ad.
 - Choosing the films is up to your app. Try it on the dev page with `?overlayDemo=1`.
+
+## Watch progress
+
+With `catalogueId`, the player saves where the viewer is, for "Continue watching" and resuming. With the viewer's
+authorization and the storefront it saves to the EYZFlow watch history itself, with no code in the app:
+
+```tsx
+<EYZFlowPlayer
+  streamId={stream.id}
+  drmAuthorizationKey={`Bearer ${accessToken}`}
+  storefrontId={storefrontId}
+  offerId={stream.offer_id}
+  catalogueId={stream.catalogue_id}
+  startTime={progress?.progress_seconds}   // the resume point
+/>
+```
+
+It sends `PUT /v1/content/storefront/{storefrontId}/watch-history` at most every 10 s while the film plays, at once on
+a pause or a seek, when the page is hidden and when playback stops or the page closes, and with `completed: true` at
+the end. From 95 % on the film counts as watched; the player config's `watchProgress.completedPercent` (50–100)
+changes that, and 100 means only the end itself. While casting, the TV's position is saved. Ads save
+nothing, and nothing is saved before playback reaches `startTime`, so a saved position is never overwritten with 0.
+A failed save is logged and never stops playback. Leave `catalogueId` out for trailers; a film the end screen picks is
+not saved.
+
+To save somewhere else, for example your own backend, pass a `watchProgressStore`. The player then decides when to save
+and calls it instead of the EYZFlow API, as the iOS and Flutter players do with theirs:
+
+```tsx
+import type { WatchProgressStore } from "eyzflow-player";
+
+const myWatchHistory: WatchProgressStore = {
+  async save({ catalogueId, progressSeconds, completed }, { final }) {
+    // `final` is the last save of a closing page: send it with `keepalive`.
+    await fetch(`/api/progress/${catalogueId}`, {
+      method: "PUT",
+      body: JSON.stringify({ progressSeconds, completed }),
+      keepalive: final,
+    });
+  },
+};
+
+<EYZFlowPlayer streamId={stream.id} catalogueId={stream.catalogue_id} watchProgressStore={myWatchHistory} />
+```
+
+`watchProgressStore={null}` saves nothing. An app that saves watch progress itself should stop once it passes
+`catalogueId`, or each position is written twice.
 
 ## Endpoints
 

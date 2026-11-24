@@ -7,6 +7,7 @@ export type {
   PlayerCastConfig,
   PlayerAdsConfig,
   PlayerDrmConfig,
+  PlayerWatchProgressConfig,
 } from "./lib/config-types";
 export type { PlayerSeekConfig } from "./lib/seek-steps";
 export type { PlaybackLimitCode, PlaybackLimitError } from "./lib/playback-session";
@@ -20,3 +21,5 @@ export type {
   EndScreenSelectContext,
   PlayerEndScreenConfig,
 } from "./lib/end-screen";
+export { eyzflowWatchHistoryStore } from "./lib/watch-progress";
+export type { EYZFlowWatchHistoryTarget, WatchProgress, WatchProgressStore } from "./lib/watch-progress";
