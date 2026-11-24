@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { ShakaTrack, ShakaTextTrack } from "../../lib/shaka-types";
+import type { AudioOption } from "../../lib/media-tracks";
 import { Icon, type IconName } from "./icons";
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-type Panel = "main" | "quality" | "subtitles" | "speed";
+type Panel = "main" | "quality" | "subtitles" | "audio" | "speed";
 
 type Props = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -13,18 +14,23 @@ type Props = {
   textTracks: ShakaTextTrack[];
   activeTextTrack: ShakaTextTrack | null;
   captionsVisible: boolean;
+  audioOptions: AudioOption[];
+  activeAudio: AudioOption | null;
   showQuality: boolean;
+  /** Playback speed applies to the video in this browser: hidden while casting. */
+  showSpeed?: boolean;
   showSubtitles: boolean;
   onSelectTrack: (t: ShakaTrack) => void;
   onSelectTextTrack: (t: ShakaTextTrack) => void;
   onCaptionsOff: () => void;
+  onSelectAudio: (option: AudioOption) => void;
   /** The menu opened or closed (the player keeps its controls up while it is open). */
   onOpenChange?: (open: boolean) => void;
 };
 
-function textTrackLabel(track: ShakaTextTrack, index: number): string {
+function languageLabel(track: { label: string | null; language: string }, fallback: string): string {
   if (track.label) return track.label;
-  if (track.language) {
+  if (track.language && track.language !== "und") {
     try {
       const name = new Intl.DisplayNames(undefined, { type: "language" }).of(track.language);
       if (name) return name;
@@ -33,7 +39,15 @@ function textTrackLabel(track: ShakaTextTrack, index: number): string {
     }
     return track.language;
   }
-  return `Subtitles ${index + 1}`;
+  return fallback;
+}
+
+function textTrackLabel(track: ShakaTextTrack, index: number): string {
+  return languageLabel(track, `Subtitles ${index + 1}`);
+}
+
+function audioLabel(option: AudioOption, index: number): string {
+  return languageLabel(option, `Audio ${index + 1}`);
 }
 
 function MenuOption({
@@ -69,11 +83,15 @@ export function SettingsMenu({
   textTracks,
   activeTextTrack,
   captionsVisible,
+  audioOptions,
+  activeAudio,
   showQuality,
+  showSpeed = true,
   showSubtitles,
   onSelectTrack,
   onSelectTextTrack,
   onCaptionsOff,
+  onSelectAudio,
   onOpenChange,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -81,8 +99,9 @@ export function SettingsMenu({
   const [rate, setRate] = useState(1);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
+  // Variants of the audio language playing now, so picking a quality keeps the language.
   const videoTracks = tracks
-    .filter((t) => t.height != null)
+    .filter((t) => t.height != null && (!activeTrack || t.language === activeTrack.language))
     .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))
     .filter((t, i, all) => i === 0 || all[i - 1].height !== t.height);
 
@@ -136,12 +155,17 @@ export function SettingsMenu({
 
   const hasQuality = showQuality && videoTracks.length > 0;
   const hasSubtitles = showSubtitles && textTracks.length > 0;
+  // One language is nothing to choose between.
+  const hasAudio = audioOptions.length > 1;
 
   const qualityValue = activeTrack?.height ? `${activeTrack.height}p` : "Auto";
   const subtitleValue =
     captionsVisible && activeTextTrack
       ? textTrackLabel(activeTextTrack, textTracks.findIndex((t) => t.id === activeTextTrack.id))
       : "Off";
+  const audioValue = activeAudio
+    ? audioLabel(activeAudio, audioOptions.findIndex((o) => o.id === activeAudio.id))
+    : "Default";
 
   const row = (icon: IconName, label: string, value: string, target: Panel) => (
     <button
@@ -171,7 +195,8 @@ export function SettingsMenu({
           {panel === "main" && (
             <>
               {hasSubtitles && row("captions", "Subtitles/CC", subtitleValue, "subtitles")}
-              {row("speed", "Playback speed", speedLabel(rate), "speed")}
+              {hasAudio && row("audio", "Audio", audioValue, "audio")}
+              {showSpeed && row("speed", "Playback speed", speedLabel(rate), "speed")}
               {hasQuality && row("tune", "Quality", qualityValue, "quality")}
             </>
           )}
@@ -201,6 +226,21 @@ export function SettingsMenu({
                     label={textTrackLabel(t, i)}
                     selected={captionsVisible && activeTextTrack?.id === t.id}
                     onPick={() => pick(() => onSelectTextTrack(t))}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+          {panel === "audio" && (
+            <>
+              {header("Audio")}
+              <div className="eyz-menu-scroll">
+                {audioOptions.map((o, i) => (
+                  <MenuOption
+                    key={o.id}
+                    label={audioLabel(o, i)}
+                    selected={activeAudio?.id === o.id}
+                    onPick={() => pick(() => onSelectAudio(o))}
                   />
                 ))}
               </div>

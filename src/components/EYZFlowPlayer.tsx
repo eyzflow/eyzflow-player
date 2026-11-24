@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./EYZFlowPlayer.css";
 import { useShaka } from "../lib/use-shaka";
+import { useCast } from "../lib/use-cast";
 import { fetchPlayerConfig } from "../lib/remote-config";
 import { DEFAULT_CONFIG, type PlayerConfig } from "../lib/config-types";
 import { ControlBar } from "./controls/ControlBar";
@@ -101,6 +102,10 @@ export type EYZFlowPlayerProps = {
    * wins when it returns something.
    */
   endScreen?: EndScreenOptions;
+  /** The film's title, shown on the TV and in the Cast media controls while casting. */
+  title?: string;
+  /** The film's poster image URL, shown on the TV and in the Cast media controls while casting. */
+  poster?: string;
   /**
    * Audio language to start in when the stream has it (BCP 47, e.g. "de"); otherwise the stream's default. Read when a
    * stream loads.
@@ -156,6 +161,8 @@ export function EYZFlowPlayer({
   onSignal,
   renderOverlay,
   endScreen,
+  title,
+  poster,
   preferredAudioLanguage,
   preferredSubtitleLanguage,
   maxBitrate,
@@ -212,7 +219,7 @@ export function EYZFlowPlayer({
   );
 
   // A stream the end screen picked plays in place, until the app passes another `streamId`.
-  const [picked, setPicked] = useState<{ from: string; streamId: string } | null>(null);
+  const [picked, setPicked] = useState<{ from: string; streamId: string; title: string; poster?: string } | null>(null);
   const playingStreamId = picked?.from === streamId ? picked.streamId : streamId;
   const thumbnailsUrl =
     thumbnails === false || config.features.thumbnails === false
@@ -260,15 +267,58 @@ export function EYZFlowPlayer({
     onEnded,
   });
 
-  const { activeSignal, skipSignal, adPlaying, state, ended, seek, play, pause, playing, currentTime, duration, hasClosingCredits, hasThumbnails, getThumbnail } =
-    shaka;
+  // Chromecast: while a session is open the TV plays, and the controls below drive it instead of the <video>.
+  const cast = useCast({
+    enabled: config.features.chromecast && !configLoading,
+    config: config.cast,
+    streamId: playingStreamId,
+    ready: shaka.loadedStreamId === playingStreamId,
+    start: () => ({
+      accessToken: shaka.castAccessToken(),
+      startTime: shaka.videoRef.current?.currentTime ?? shaka.currentTime,
+      playing: shaka.playing,
+      textLanguage: shaka.captionsVisible ? (shaka.activeTextTrack?.language ?? null) : null,
+      audioLanguage: shaka.activeAudio?.language ?? null,
+      audioLabel: shaka.activeAudio?.label ?? null,
+      // A film the end screen picked has its own title and poster.
+      title: picked?.from === streamId ? picked.title : title,
+      poster: picked?.from === streamId ? picked.poster : poster,
+    }),
+    onStart: shaka.pause,
+    onEnd: (position, wasPlaying) => {
+      shaka.seek(position);
+      if (wasPlaying) shaka.play();
+    },
+  });
+  const casting = cast.casting;
+  const media = casting ? cast : shaka;
+
+  const { activeSignal, skipSignal, adPlaying, state, ended, hasClosingCredits, hasThumbnails, getThumbnail } = shaka;
+  const { seek, play, pause, playing, currentTime, duration } = media;
+
+  // The browser's video stays still while the TV plays, also when its autoplay comes after the session (a page that
+  // rejoins a running session).
+  const localPlaying = shaka.playing;
+  const pauseLocal = shaka.pause;
+  useEffect(() => {
+    if (casting && localPlaying) pauseLocal();
+  }, [casting, localPlaying, pauseLocal]);
+
+  // The app hears where the TV is while casting, as it does from the <video> (e.g. to keep a resume point).
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+  });
+  useEffect(() => {
+    if (casting && cast.currentTime > 0) onTimeUpdateRef.current?.(cast.currentTime, cast.duration);
+  }, [casting, cast.currentTime, cast.duration]);
 
   // The app's overlay: asked for at a signal or after the end, until dismissed for that moment.
   const moment = overlayMoment(activeSignal, ended);
   const momentKey = moment && `${playingStreamId}:${moment}`;
   const [dismissedMoment, setDismissedMoment] = useState<string | null>(null);
   const overlay =
-    renderOverlay && momentKey && momentKey !== dismissedMoment && !adPlaying && state === "ready"
+    renderOverlay && momentKey && momentKey !== dismissedMoment && !adPlaying && state === "ready" && !casting
       ? renderOverlay({
           signal: activeSignal,
           ended,
@@ -317,7 +367,7 @@ export function EYZFlowPlayer({
   const selectEndItem = (item: EndScreenItem, autoplay: boolean) => {
     let prevented = false;
     endScreen?.onSelect?.(item, { autoplay, preventDefault: () => { prevented = true; } });
-    if (!prevented) setPicked({ from: streamId, streamId: item.streamId });
+    if (!prevented) setPicked({ from: streamId, streamId: item.streamId, title: item.title, poster: item.poster });
   };
   // Esc goes back to the credits, as clicking the shrunk video does.
   useEffect(() => {
@@ -329,7 +379,8 @@ export function EYZFlowPlayer({
     return () => window.removeEventListener("keydown", onKey);
   }, [endPhase, dismissMoment]);
 
-  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown && !endPhase;
+  // The signal is the browser video's, which stands still while casting.
+  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown && !endPhase && !casting;
 
   // Auto-hide controls after 3s of pointer inactivity, but only while playing
   // and no settings menu is open.
@@ -340,10 +391,10 @@ export function EYZFlowPlayer({
   const resetHideTimer = useCallback(() => {
     setHiding(false);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (config.features.autoHideControls && shaka.playing && !menuOpen) {
+    if (config.features.autoHideControls && playing && !menuOpen && !casting) {
       hideTimer.current = setTimeout(() => setHiding(true), 3000);
     }
-  }, [config.features.autoHideControls, shaka.playing, menuOpen]);
+  }, [config.features.autoHideControls, playing, menuOpen, casting]);
 
   // Clicks and shortcuts drive the video only while the controls are in charge:
   // not during an ad, the app's overlay or the end screen.
@@ -356,7 +407,8 @@ export function EYZFlowPlayer({
     setFlash((prev) => ({ icon, text, side, key: (prev?.key ?? 0) + 1 }));
   }, []);
 
-  const { setVolume, setMuted, toggleCaptions, videoRef, seekBy } = shaka;
+  const { videoRef } = shaka;
+  const { setVolume, setMuted, toggleCaptions, seekBy, volume, muted } = media;
   const steps = resolveSeekSteps(config.seek, seekStepsProp);
 
   // Quick presses in one direction add up in the flash ("15 seconds"), as on YouTube.
@@ -393,7 +445,7 @@ export function EYZFlowPlayer({
       const video = videoRef.current;
       if (!video) return;
       const vol = (delta: number) => {
-        const next = Math.round(Math.max(0, Math.min(1, video.volume + delta)) * 100) / 100;
+        const next = Math.round(Math.max(0, Math.min(1, volume + delta)) * 100) / 100;
         setVolume(next);
         showFlash(next === 0 ? "volumeOff" : "volumeUp", `${Math.round(next * 100)}%`);
       };
@@ -428,8 +480,8 @@ export function EYZFlowPlayer({
           vol(-0.05);
           break;
         case "m":
-          setMuted(!video.muted);
-          showFlash(video.muted ? "volumeUp" : "volumeOff");
+          setMuted(!muted);
+          showFlash(muted ? "volumeUp" : "volumeOff");
           break;
         case "f":
           void toggleFullscreen(containerRef.current);
@@ -438,15 +490,15 @@ export function EYZFlowPlayer({
           if (config.features.captions) toggleCaptions();
           break;
         default:
-          if (/^[0-9]$/.test(e.key) && video.duration) {
-            seek((video.duration * Number(e.key)) / 10);
+          if (/^[0-9]$/.test(e.key) && duration) {
+            seek((duration * Number(e.key)) / 10);
             break;
           }
           return;
       }
       e.preventDefault();
     },
-    [resetHideTimer, controlsActive, videoRef, seek, stepBy, steps.arrowKeys, steps.buttons, setVolume, setMuted, toggleCaptions, togglePlay, showFlash, config.features.captions],
+    [resetHideTimer, controlsActive, videoRef, seek, stepBy, steps.arrowKeys, steps.buttons, setVolume, setMuted, volume, muted, duration, toggleCaptions, togglePlay, showFlash, config.features.captions],
   );
 
   useEffect(() => {
@@ -507,7 +559,13 @@ export function EYZFlowPlayer({
         />
       )}
       <div ref={shaka.adContainerRef} className="eyz-ad-container" />
-      {shaka.activeCueLines.length > 0 && !shaka.adPlaying && !shrunk && (
+      {casting && (
+        <div className="eyz-casting" role="status">
+          <Icon name="castConnected" size={48} />
+          <span>{cast.deviceName ? `Playing on ${cast.deviceName}` : "Playing on your TV"}</span>
+        </div>
+      )}
+      {shaka.activeCueLines.length > 0 && !shaka.adPlaying && !shrunk && !casting && (
         <div className="eyz-text-layer" aria-live="off">
           <div className="eyz-cue">
             {shaka.activeCueLines.map((line, i) => (
@@ -570,30 +628,33 @@ export function EYZFlowPlayer({
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
       {resolved.controls && shaka.state !== "error" && !shaka.adPlaying && (
         <ControlBar
-          playing={shaka.playing}
-          currentTime={shaka.currentTime}
-          duration={shaka.duration}
-          buffered={shaka.buffered}
-          volume={shaka.volume}
-          muted={shaka.muted}
+          playing={playing}
+          currentTime={currentTime}
+          duration={duration}
+          buffered={casting ? 0 : shaka.buffered}
+          volume={volume}
+          muted={muted}
           tracks={shaka.tracks}
           activeTrack={shaka.activeTrack}
-          textTracks={shaka.textTracks}
-          activeTextTrack={shaka.activeTextTrack}
-          captionsVisible={shaka.captionsVisible}
+          textTracks={media.textTracks}
+          activeTextTrack={media.activeTextTrack}
+          captionsVisible={casting ? cast.activeTextTrack !== null : shaka.captionsVisible}
+          audioOptions={media.audioOptions}
+          activeAudio={media.activeAudio}
           features={config.features}
-          castConfig={config.cast}
+          cast={{ available: cast.available, casting, deviceName: cast.deviceName, onToggle: cast.toggle }}
           videoRef={shaka.videoRef}
           containerRef={containerRef}
-          onPlay={shaka.play}
-          onPause={shaka.pause}
-          onSeek={shaka.seek}
-          onVolume={shaka.setVolume}
-          onMute={shaka.setMuted}
+          onPlay={play}
+          onPause={pause}
+          onSeek={seek}
+          onVolume={setVolume}
+          onMute={setMuted}
           onSelectTrack={shaka.selectTrack}
-          onSelectTextTrack={shaka.selectTextTrack}
-          onCaptionsOff={shaka.disableCaptions}
-          onToggleCaptions={shaka.toggleCaptions}
+          onSelectTextTrack={media.selectTextTrack}
+          onCaptionsOff={media.disableCaptions}
+          onSelectAudio={media.selectAudio}
+          onToggleCaptions={toggleCaptions}
           onMenuOpenChange={setMenuOpen}
           getThumbnail={hasThumbnails ? getThumbnail : undefined}
         />
