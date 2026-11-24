@@ -170,7 +170,9 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     }
     setTracks(t);
     setActiveIds(ids);
-    if (t.length > 0) lastTracksRef.current = { tracks: t, ids };
+    // Kept only once the TV plays with the browser's languages applied: a load that fails, or the media that was on
+    // the TV before, hands nothing back.
+    if (t.length > 0 && started && !carryRef.current && !loadingRef.current) lastTracksRef.current = { tracks: t, ids };
     if (player.isMediaLoaded) {
       if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
       loadTimerRef.current = null;

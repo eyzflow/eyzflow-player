@@ -115,6 +115,9 @@ describe("castHandback", () => {
     expect(castHandback([], [])).toBeNull();
     expect(castHandback([{ trackId: 1, type: "VIDEO" }], [1])).toBeNull();
   });
+  it("hands back nothing when the TV's subtitle has no language", () => {
+    expect(castHandback([...castTracks, { trackId: 6, type: "TEXT" }], [2, 6])).toBeNull();
+  });
 });
 
 describe("matchingTrack", () => {

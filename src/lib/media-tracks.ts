@@ -103,15 +103,17 @@ export type TrackChoice = { language: string; label: string | null };
  */
 export type CastHandback = { text: TrackChoice | null; audio: TrackChoice | null };
 
-/** The TV's active subtitle and audio from its last status, or null when it reported no tracks (nothing to hand back). */
+/**
+ * The TV's active subtitle and audio from its last status, or null when it reported no tracks (nothing to hand back).
+ * A subtitle track on without a language can't be matched, so the browser keeps its own then.
+ */
 export function castHandback(tracks: CastTrack[], activeIds: number[]): CastHandback | null {
   if (!tracks.some((t) => isText(t) || isAudio(t))) return null;
   const choice = (t: CastTrack | undefined): TrackChoice | null =>
     t?.language ? { language: t.language, label: t.name || null } : null;
-  return {
-    text: choice(tracks.find((t) => isText(t) && activeIds.includes(t.trackId))),
-    audio: choice(tracks.find((t) => isAudio(t) && activeIds.includes(t.trackId))),
-  };
+  const text = tracks.find((t) => isText(t) && activeIds.includes(t.trackId));
+  if (text && !text.language) return null;
+  return { text: choice(text), audio: choice(tracks.find((t) => isAudio(t) && activeIds.includes(t.trackId))) };
 }
 
 /**
