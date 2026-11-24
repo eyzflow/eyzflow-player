@@ -24,6 +24,7 @@ import { AnalyticsCollector } from "./analytics/collector";
 import { BeatTransport } from "./analytics/transport";
 import { UsageReporter } from "./usage-reporter";
 import { seekTarget } from "./seek-steps";
+import { PLAYER_NAME, playbackErrorMessage } from "./error-message";
 
 export type ShakaState = "idle" | "loading" | "ready" | "error";
 
@@ -602,8 +603,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
       let shaka;
       try {
         shaka = await loadShaka();
-      } catch (e) {
-        if (!cancelled) fail(e instanceof Error ? e.message : "Could not load player.");
+      } catch {
+        if (!cancelled) fail(`${PLAYER_NAME} couldn't start.`);
         return;
       }
       if (cancelled) return;
@@ -646,10 +647,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
           failLimit({ code: refused, message: limitMessage(refused), details: {} });
           return;
         }
-        const msg = detail?.code
-          ? `Playback error ${detail.code}${detail.message ? `: ${detail.message}` : ""}`
-          : (detail?.message ?? "Playback failed.");
-        fail(msg);
+        fail(playbackErrorMessage(detail));
       });
 
       player.addEventListener("trackschanged", () => { if (!cancelled) refreshTracks(); });
@@ -815,12 +813,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
           failLicense({ code: siteRefused, message: licenseMessage(siteRefused) });
           return;
         }
-        const msg = e?.code
-          ? `Playback error ${e.code}${e.message ? `: ${e.message}` : ""}`
-          : err instanceof Error
-            ? err.message
-            : "Playback failed.";
-        fail(msg);
+        fail(playbackErrorMessage(err));
       }
     })();
 

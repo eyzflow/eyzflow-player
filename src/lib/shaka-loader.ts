@@ -44,5 +44,5 @@ export async function loadShaka(): Promise<ShakaGlobal> {
     return cached;
   }
 
-  throw new Error("Shaka Player failed to initialize");
+  throw new Error("Player library failed to initialize");
 }
