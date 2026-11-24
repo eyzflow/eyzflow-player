@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.2
 
 - Chromecast (EYF-478): stopping casting now keeps the subtitle (or subtitles off) and audio language last on on the
   TV, whether the viewer picked them in the browser's menus or on the TV's own menu. Audio prefers the same label, so
