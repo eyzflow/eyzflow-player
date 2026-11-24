@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { castMediaFor } from "./cast-sender";
+import { castMediaFor, castReceiverAppId } from "./cast-sender";
 
 describe("castMediaFor", () => {
   it("sends the DASH manifest, the Widevine licence URL and the access token for a protected stream", () => {
@@ -23,5 +23,16 @@ describe("castMediaFor", () => {
     expect(castMediaFor("abc", null, { poster: "https://img/p.jpg" }).metadata).toEqual({ title: undefined, images: ["https://img/p.jpg"] });
     expect(castMediaFor("abc", null, { title: "  " }).metadata).toBeNull();
     expect(castMediaFor("abc", null).metadata).toBeNull();
+  });
+});
+
+describe("castReceiverAppId", () => {
+  it("casts to the config's own receiver", () => {
+    expect(castReceiverAppId({ receiverAppId: " BBA8BE8B " })).toBe("BBA8BE8B");
+  });
+  it("falls back to the EYZFlow receiver when the config names none", () => {
+    expect(castReceiverAppId({ receiverAppId: "" })).toBe("A534F914");
+    expect(castReceiverAppId({ receiverAppId: "   " })).toBe("A534F914");
+    expect(castReceiverAppId(undefined)).toBe("A534F914");
   });
 });

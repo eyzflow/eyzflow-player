@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.9.0
+npm install github:eyzflow/eyzflow-player#v0.9.1
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -105,8 +105,9 @@ With `features.ads` on and an `ads.adTagUrl` in the player config, the player pl
 ## Chromecast
 
 With `features.chromecast` on, Chrome and Edge show a Cast button. Casting plays the film on the TV through the
-receiver app in `cast.receiverAppId` (the EYZFlow receiver, `https://stream.eyzflow.com/cast/index.html`, which adds
-the DRM `access-token` to the licence request; without an id, Google's default receiver plays clear streams only). The
+receiver app in `cast.receiverAppId`. Without an id it uses the EYZFlow receiver (`A534F914`,
+`https://stream.eyzflow.com/cast/index.html`), which adds the DRM `access-token` to the licence request, so protected
+films and clear trailers both play. The
 TV starts where the viewer is, with the subtitle and audio language on in the browser. While casting, the controls,
 Subtitles/CC and Audio drive the TV; stopping casting resumes in the browser at the TV's position. Watch time on the
 TV is not counted in analytics or royalty usage. Pass `title` and `poster` (an image URL) so the TV, Google Home and the

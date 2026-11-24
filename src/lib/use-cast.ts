@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayerCastConfig } from "./config-types";
 import {
   castMediaFor,
-  DEFAULT_RECEIVER_APP_ID,
+  castReceiverAppId,
   loadCastSender,
   type CastContext,
   type CastMediaSession,
@@ -236,7 +236,7 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     sync();
   }, [sync, watchMedia]);
 
-  const receiverAppId = config?.receiverAppId?.trim() || DEFAULT_RECEIVER_APP_ID;
+  const receiverAppId = castReceiverAppId(config);
   const autoJoinPolicy = config?.autoJoinPolicy ?? "tab_and_origin_scoped";
 
   useEffect(() => {

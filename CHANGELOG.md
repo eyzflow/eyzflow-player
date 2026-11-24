@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- Chromecast (EYF-477): a player config with no Cast receiver id now casts through the EYZFlow receiver (`A534F914`)
+  instead of Google's default receiver, which can't send the DRM `access-token`, so protected films didn't play on the
+  TV. A config that names its own receiver keeps it.
+
 ## 0.9.0
 
 - Chromecast (EYF-475): the Cast button now plays the film on the TV. It sends the EYZFlow receiver the stream's DASH
