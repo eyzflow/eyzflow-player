@@ -1,6 +1,6 @@
 {
   "name": "eyzflow-player",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "type": "module",
   "description": "EYZFlow video player \u2014 Shaka-powered, DRM-enabled, custom branded",
   "main": "./src/index.ts",

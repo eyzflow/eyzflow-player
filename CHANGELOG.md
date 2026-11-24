@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 - Chromecast (EYF-475): the Cast button now plays the film on the TV. It sends the EYZFlow receiver the stream's DASH
   manifest, the Widevine licence URL and the browser's `access-token`, from where the viewer is, with the subtitle and
