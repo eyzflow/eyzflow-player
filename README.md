@@ -109,7 +109,8 @@ receiver app in `cast.receiverAppId` (the EYZFlow receiver, `https://stream.eyzf
 the DRM `access-token` to the licence request; without an id, Google's default receiver plays clear streams only). The
 TV starts where the viewer is, with the subtitle and audio language on in the browser. While casting, the controls,
 Subtitles/CC and Audio drive the TV; stopping casting resumes in the browser at the TV's position. Watch time on the
-TV is not counted in analytics or royalty usage.
+TV is not counted in analytics or royalty usage. Pass `title` and `poster` (an image URL) so the TV, Google Home and the
+phone's media controls name the film.
 
 ## Skip intro, recap and credits
 

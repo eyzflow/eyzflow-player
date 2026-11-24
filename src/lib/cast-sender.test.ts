@@ -15,4 +15,13 @@ describe("castMediaFor", () => {
   it("sends only the manifest for a clear stream", () => {
     expect(castMediaFor("abc", null).customData).toEqual({ manifestUrl: "https://stream.eyzflow.com/abc/manifest.mpd" });
   });
+  it("names the film and its poster when the app gives them", () => {
+    expect(castMediaFor("abc", null, { title: " Ein Film ", poster: "https://img/p.jpg" }).metadata).toEqual({
+      title: "Ein Film",
+      images: ["https://img/p.jpg"],
+    });
+    expect(castMediaFor("abc", null, { poster: "https://img/p.jpg" }).metadata).toEqual({ title: undefined, images: ["https://img/p.jpg"] });
+    expect(castMediaFor("abc", null, { title: "  " }).metadata).toBeNull();
+    expect(castMediaFor("abc", null).metadata).toBeNull();
+  });
 });

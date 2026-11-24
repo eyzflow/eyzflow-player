@@ -32,6 +32,9 @@ export type CastStart = {
   audioLanguage: string | null;
   /** The browser's audio label, to tell one language's stereo and 5.1 apart. */
   audioLabel: string | null;
+  /** The film's title and poster, for the TV. */
+  title?: string | null;
+  poster?: string | null;
 };
 
 export type UseCastOptions = {
@@ -186,14 +189,6 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     if (!remote || !session || loadingRef.current === id) return;
     loadingRef.current = id;
     const from = startRef.current();
-    const media = castMediaFor(id, from.accessToken);
-    const info = new remote.sdk.media.MediaInfo(media.contentId, media.contentType);
-    info.contentUrl = media.contentUrl;
-    info.customData = media.customData;
-    info.streamType = remote.sdk.media.StreamType.BUFFERED;
-    const request = new remote.sdk.media.LoadRequest(info);
-    request.currentTime = from.startTime;
-    request.autoplay = true;
     lastRef.current = { ...lastRef.current, time: from.startTime };
     setCurrentTime(from.startTime);
     setTracks([]);
@@ -206,6 +201,26 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
       remoteRef.current?.context.endCurrentSession(true);
     }, LOAD_TIMEOUT_MS);
     try {
+      const { media: castMedia, Image } = remote.sdk;
+      const media = castMediaFor(id, from.accessToken, { title: from.title, poster: from.poster });
+      const info = new castMedia.MediaInfo(media.contentId, media.contentType);
+      info.contentUrl = media.contentUrl;
+      info.customData = media.customData;
+      info.streamType = castMedia.StreamType.BUFFERED;
+      if (media.metadata) {
+        // The title and poster only decorate the TV: casting goes on without them.
+        try {
+          const metadata = new castMedia.MovieMediaMetadata();
+          if (media.metadata.title) metadata.title = media.metadata.title;
+          metadata.images = media.metadata.images.map((url) => new Image(url));
+          info.metadata = metadata;
+        } catch (error) {
+          log("leaving out the title and poster", error);
+        }
+      }
+      const request = new castMedia.LoadRequest(info);
+      request.currentTime = from.startTime;
+      request.autoplay = true;
       await session.loadMedia(request);
     } catch (error) {
       log("the TV could not load the stream", error);

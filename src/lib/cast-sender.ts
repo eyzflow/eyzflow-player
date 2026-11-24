@@ -8,15 +8,22 @@ export const DEFAULT_RECEIVER_APP_ID = "CC1AD845";
 /** The DASH manifest's type: the EYZFlow receiver plays DASH with Widevine, as the web player does. */
 const DASH = "application/dash+xml";
 
+/** The film's title and poster image URL, shown on the TV and in the Cast media controls. */
+export type CastDetails = { title?: string | null; poster?: string | null };
+
 /**
  * What the EYZFlow receiver loads (stream.eyzflow.com/cast): the stream id as `contentId`, and in `customData` the
  * DASH manifest, plus the Widevine licence URL and the browser's `access-token` header for a protected stream. The
  * same LOAD the Flutter player sends.
  */
-export function castMediaFor(streamId: string, accessToken: string | null) {
+export function castMediaFor(streamId: string, accessToken: string | null, details: CastDetails = {}) {
   const manifestUrl = streamManifestUrl(streamId, "dash");
+  const title = details.title?.trim();
+  const poster = details.poster?.trim();
   return {
     contentId: streamId,
+    /** What the TV, Google Home and the phone's media controls show; null without a title or poster. */
+    metadata: title || poster ? { title: title || undefined, images: poster ? [poster] : [] } : null,
     contentUrl: manifestUrl,
     contentType: DASH,
     customData: {
@@ -87,12 +94,13 @@ export type CastFramework = {
 
 export type ChromeCastMedia = {
   MediaInfo: new (contentId: string, contentType: string) => Record<string, unknown>;
+  MovieMediaMetadata: new () => Record<string, unknown>;
   LoadRequest: new (mediaInfo: unknown) => Record<string, unknown>;
   EditTracksInfoRequest: new (activeTrackIds: number[]) => unknown;
   StreamType: { BUFFERED: string };
 };
 
-export type CastSdk = { framework: CastFramework; media: ChromeCastMedia };
+export type CastSdk = { framework: CastFramework; media: ChromeCastMedia; Image: new (url: string) => unknown };
 
 declare global {
   interface Window {
@@ -103,11 +111,12 @@ declare global {
 function sdk(): CastSdk | null {
   const w = window as unknown as {
     cast?: { framework?: CastFramework };
-    chrome?: { cast?: { media?: ChromeCastMedia } };
+    chrome?: { cast?: { media?: ChromeCastMedia; Image?: new (url: string) => unknown } };
   };
   const framework = w.cast?.framework;
   const media = w.chrome?.cast?.media;
-  return framework && media ? { framework, media } : null;
+  const Image = w.chrome?.cast?.Image;
+  return framework && media && Image ? { framework, media, Image } : null;
 }
 
 let loading: Promise<CastSdk | null> | null = null;

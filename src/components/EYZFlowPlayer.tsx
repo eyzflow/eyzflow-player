@@ -102,6 +102,10 @@ export type EYZFlowPlayerProps = {
    * wins when it returns something.
    */
   endScreen?: EndScreenOptions;
+  /** The film's title, shown on the TV and in the Cast media controls while casting. */
+  title?: string;
+  /** The film's poster image URL, shown on the TV and in the Cast media controls while casting. */
+  poster?: string;
   /**
    * Audio language to start in when the stream has it (BCP 47, e.g. "de"); otherwise the stream's default. Read when a
    * stream loads.
@@ -157,6 +161,8 @@ export function EYZFlowPlayer({
   onSignal,
   renderOverlay,
   endScreen,
+  title,
+  poster,
   preferredAudioLanguage,
   preferredSubtitleLanguage,
   maxBitrate,
@@ -213,7 +219,7 @@ export function EYZFlowPlayer({
   );
 
   // A stream the end screen picked plays in place, until the app passes another `streamId`.
-  const [picked, setPicked] = useState<{ from: string; streamId: string } | null>(null);
+  const [picked, setPicked] = useState<{ from: string; streamId: string; title: string; poster?: string } | null>(null);
   const playingStreamId = picked?.from === streamId ? picked.streamId : streamId;
   const thumbnailsUrl =
     thumbnails === false || config.features.thumbnails === false
@@ -274,6 +280,9 @@ export function EYZFlowPlayer({
       textLanguage: shaka.captionsVisible ? (shaka.activeTextTrack?.language ?? null) : null,
       audioLanguage: shaka.activeAudio?.language ?? null,
       audioLabel: shaka.activeAudio?.label ?? null,
+      // A film the end screen picked has its own title and poster.
+      title: picked?.from === streamId ? picked.title : title,
+      poster: picked?.from === streamId ? picked.poster : poster,
     }),
     onStart: shaka.pause,
     onEnd: (position, wasPlaying) => {
@@ -358,7 +367,7 @@ export function EYZFlowPlayer({
   const selectEndItem = (item: EndScreenItem, autoplay: boolean) => {
     let prevented = false;
     endScreen?.onSelect?.(item, { autoplay, preventDefault: () => { prevented = true; } });
-    if (!prevented) setPicked({ from: streamId, streamId: item.streamId });
+    if (!prevented) setPicked({ from: streamId, streamId: item.streamId, title: item.title, poster: item.poster });
   };
   // Esc goes back to the credits, as clicking the shrunk video does.
   useEffect(() => {

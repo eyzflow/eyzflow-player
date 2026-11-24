@@ -56,6 +56,8 @@ export function PlayerPage() {
         configId={configId}
         config={config}
         drmAuthorizationKey={drmKey}
+        title={params.get("title") ?? undefined}
+        poster={params.get("poster") ?? undefined}
         storefrontId={storefrontId}
         autoPlay={autoPlay}
         renderOverlay={overlayDemo ? similarFilms : undefined}

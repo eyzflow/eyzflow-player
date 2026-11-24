@@ -7,7 +7,8 @@
   audio language on in the browser. While casting, play, pause, seek, volume and the time drive the TV, and the
   Subtitles/CC and Audio menus list the TV's tracks and switch them there. Stopping casting resumes in the browser at
   the TV's position. Before, the button only opened a Cast session, so nothing played and the menus kept switching
-  the browser's video.
+  the browser's video. The new `title` and `poster` props name the film on the TV and in the Cast media controls (a
+  film picked from the end screen uses its own).
 - Audio menu: the settings menu has an Audio entry when the film has more than one audio language. Picking a quality
   keeps the audio language.
 - Error messages (EYF-472): the error screen and `onError` name EYZFlow Player and the error code
