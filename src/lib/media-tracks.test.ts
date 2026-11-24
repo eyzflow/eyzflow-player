@@ -86,4 +86,12 @@ describe("castTrackForLanguage", () => {
     expect(castTrackForLanguage(castTracks, "TEXT", "fr")).toBeNull();
     expect(castTrackForLanguage(castTracks, "TEXT", null)).toBeNull();
   });
+  it("prefers the track with the same label", () => {
+    const tracks: CastTrack[] = [
+      { trackId: 1, type: "AUDIO", language: "de", name: "German stereo" },
+      { trackId: 2, type: "AUDIO", language: "de", name: "German 5.1" },
+    ];
+    expect(castTrackForLanguage(tracks, "AUDIO", "de", "German 5.1")?.trackId).toBe(2);
+    expect(castTrackForLanguage(tracks, "AUDIO", "de", "Commentary")?.trackId).toBe(1);
+  });
 });

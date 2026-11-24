@@ -30,6 +30,8 @@ export type CastStart = {
   /** The subtitle language on in the browser, or null when subtitles are off. */
   textLanguage: string | null;
   audioLanguage: string | null;
+  /** The browser's audio label, to tell one language's stereo and 5.1 apart. */
+  audioLabel: string | null;
 };
 
 export type UseCastOptions = {
@@ -102,7 +104,7 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
   const remoteRef = useRef<Remote | null>(null);
   const mediaRef = useRef<CastMediaSession | null>(null);
   // The browser's languages, applied once the TV reports its tracks.
-  const carryRef = useRef<{ text: string | null; audio: string | null } | null>(null);
+  const carryRef = useRef<{ text: string | null; audio: string | null; audioLabel: string | null } | null>(null);
   // The TV's last position and play state, for handing back when the session ends (the remote player resets then).
   const lastRef = useRef({ time: 0, playing: false });
   // The subtitle track the viewer last had on, for the captions button.
@@ -142,10 +144,12 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     const t = media?.media?.tracks ?? [];
     let ids = media?.activeTrackIds ?? [];
     const carry = carryRef.current;
-    if (carry && t.length > 0) {
+    // Once the TV plays: a switch sent while it still loads gives way to the receiver's own default tracks.
+    const started = media?.playerState === "PLAYING" || media?.playerState === "PAUSED";
+    if (carry && t.length > 0 && started) {
       carryRef.current = null;
       const text = castTrackForLanguage(t, "TEXT", carry.text);
-      const audio = castTrackForLanguage(t, "AUDIO", carry.audio);
+      const audio = castTrackForLanguage(t, "AUDIO", carry.audio, carry.audioLabel);
       let next = withActiveTrack(t, ids, "TEXT", text?.trackId ?? null);
       if (audio) next = withActiveTrack(t, next, "AUDIO", audio.trackId);
       if (next.join() !== ids.join()) {
@@ -212,7 +216,7 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     if (loadingRef.current === id) loadingRef.current = null;
     if (streamIdRef.current !== id) return;
     // Set only now, so a status of the media before this one can't use it up.
-    carryRef.current = { text: from.textLanguage, audio: from.audioLanguage };
+    carryRef.current = { text: from.textLanguage, audio: from.audioLanguage, audioLabel: from.audioLabel };
     watchMedia();
     sync();
   }, [sync, watchMedia]);

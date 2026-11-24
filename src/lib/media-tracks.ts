@@ -79,8 +79,17 @@ export function withActiveTrack(tracks: CastTrack[], activeIds: number[], type: 
   return trackId === null ? kept : [...kept, trackId];
 }
 
-/** The TV's track of a kind in a language, for carrying the browser's choice over. */
-export function castTrackForLanguage(tracks: CastTrack[], type: "TEXT" | "AUDIO", language: string | null | undefined): CastTrack | null {
+/**
+ * The TV's track of a kind in a language, for carrying the browser's choice over: the one with the same label first
+ * (a film can have stereo and 5.1 in one language), else the first in the language.
+ */
+export function castTrackForLanguage(
+  tracks: CastTrack[],
+  type: "TEXT" | "AUDIO",
+  language: string | null | undefined,
+  label?: string | null,
+): CastTrack | null {
   if (!language) return null;
-  return tracks.find((t) => t.type === type && matchesLanguage(t.language, language)) ?? null;
+  const inLanguage = tracks.filter((t) => t.type === type && matchesLanguage(t.language, language));
+  return (label && inLanguage.find((t) => t.name === label)) || inLanguage[0] || null;
 }

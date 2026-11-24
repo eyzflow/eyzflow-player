@@ -18,9 +18,15 @@ export function PlayerPage() {
   const overlayDemo = params.get("overlayDemo") === "1";
   // The built-in end screen with placeholder films: "Up next" is `streamId`-2, the row `streamId`-a, -b, -c.
   const endScreenDemo = params.get("endScreenDemo") === "1";
-  const config: Partial<PlayerConfig> | undefined = adTag
-    ? { features: { ...DEFAULT_FEATURES, ads: true }, ads: { adTagUrl: adTag } }
-    : undefined;
+  // The Cast receiver to try without a remote config (e.g. A534F914, the EYZFlow receiver, for protected streams).
+  const castAppId = params.get("castAppId");
+  const config: Partial<PlayerConfig> | undefined =
+    adTag || castAppId
+      ? {
+          ...(adTag && { features: { ...DEFAULT_FEATURES, ads: true }, ads: { adTagUrl: adTag } }),
+          ...(castAppId && { cast: { receiverAppId: castAppId } }),
+        }
+      : undefined;
 
   if (!streamId) {
     return (

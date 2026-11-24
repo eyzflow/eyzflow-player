@@ -273,6 +273,7 @@ export function EYZFlowPlayer({
       playing: shaka.playing,
       textLanguage: shaka.captionsVisible ? (shaka.activeTextTrack?.language ?? null) : null,
       audioLanguage: shaka.activeAudio?.language ?? null,
+      audioLabel: shaka.activeAudio?.label ?? null,
     }),
     onStart: shaka.pause,
     onEnd: (position, wasPlaying) => {
