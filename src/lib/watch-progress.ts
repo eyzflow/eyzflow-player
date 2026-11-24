@@ -6,7 +6,7 @@ export type WatchProgress = {
   catalogueId: string;
   /** Where the viewer is, in whole seconds. */
   progressSeconds: number;
-  /** The viewer watched it to the end (or into the last 5 %). */
+  /** The viewer watched it to the end, or past the config's `watchProgress.completedPercent` (default 95 %). */
   completed: boolean;
   /** The offer played, when the app passed one. */
   offerId?: string;
@@ -52,8 +52,17 @@ export function eyzflowWatchHistoryStore(target: EYZFlowWatchHistoryTarget): Wat
 
 /** How often a playing film saves, at most, in seconds. The iOS and Flutter players use the same. */
 export const WATCH_PROGRESS_INTERVAL_SECONDS = 10;
-/** From this share of the film on, it counts as watched. */
-export const COMPLETED_RATIO = 0.95;
+/** From this share of the film on (in percent), it counts as watched, unless the player config says otherwise. */
+export const DEFAULT_COMPLETED_PERCENT = 95;
+
+/**
+ * The config's `watchProgress.completedPercent` as a share of the film: 50–100 %, else the default. 100 means only the
+ * end itself.
+ */
+export function completedRatio(percent: unknown): number {
+  const p = typeof percent === "number" && Number.isFinite(percent) ? percent : DEFAULT_COMPLETED_PERCENT;
+  return Math.min(100, Math.max(50, p)) / 100;
+}
 /** How close to the start position playback must be before anything is saved, in seconds. */
 const START_TOLERANCE_SECONDS = 2;
 
@@ -65,6 +74,8 @@ export type WatchProgressRecorderOptions = {
   /** Where playback starts (the resume point). Nothing is saved until playback gets there or the viewer seeks. */
   startTime?: number;
   intervalSeconds?: number;
+  /** From this share of the film on (0.5–1), it counts as watched. Read at each save. Missing: 0.95. */
+  completedRatio?: () => number;
   log?: (message: string, error: unknown) => void;
 };
 
@@ -167,7 +178,8 @@ export class WatchProgressRecorder {
   }
 
   private save(final: boolean): void {
-    const completed = this.duration > 0 && this.latest >= this.duration * COMPLETED_RATIO;
+    const ratio = this.opts.completedRatio?.() ?? completedRatio(undefined);
+    const completed = this.duration > 0 && (ratio >= 1 ? this.latest >= this.duration - 0.5 : this.latest >= this.duration * ratio);
     this.enqueue({ seconds: Math.floor(this.latest), completed }, final);
   }
 

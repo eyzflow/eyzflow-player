@@ -20,7 +20,7 @@ import { STREAM_CDN_ORIGIN } from "../lib/api";
 import { defaultThumbnailsUrl } from "../lib/playback-preferences";
 import { seekSteps as resolveSeekSteps, type PlayerSeekConfig } from "../lib/seek-steps";
 import { SeekButtons, SeekIcon } from "./controls/SeekButtons";
-import { eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgressStore } from "../lib/watch-progress";
+import { completedRatio, eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgressStore } from "../lib/watch-progress";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -38,6 +38,7 @@ function mergeConfig(
       ? { ...base.skipButtonTypes, ...patch.skipButtonTypes }
       : base.skipButtonTypes,
     seek: patch?.seek ? { ...base.seek, ...patch.seek } : base.seek,
+    watchProgress: patch?.watchProgress ? { ...base.watchProgress, ...patch.watchProgress } : base.watchProgress,
     drm: patch?.drm
       ? { ...base.drm, ...patch.drm, parameters: { ...base.drm?.parameters, ...patch.drm.parameters } }
       : base.drm,
@@ -248,6 +249,7 @@ export function EYZFlowPlayer({
   const watchStorefrontId = typeof mergedDrmParameters?.storefront_id === "string" ? mergedDrmParameters.storefront_id : undefined;
   const progressStoreRef = useRef<WatchProgressStore | null>(null);
   const startTimeRef = useRef(startTime);
+  const completedRatioRef = useRef(completedRatio(undefined));
   const appCallbacks = useRef({ onTimeUpdate, onPause, onSeeked, onEnded });
   // Before the effects below, so a recorder made in the same commit already sees them.
   useEffect(() => {
@@ -258,6 +260,7 @@ export function EYZFlowPlayer({
           ? eyzflowWatchHistoryStore({ storefrontId: watchStorefrontId, authorization: drmAuthorizationKey })
           : null;
     startTimeRef.current = startTime;
+    completedRatioRef.current = completedRatio(config.watchProgress?.completedPercent);
     appCallbacks.current = { onTimeUpdate, onPause, onSeeked, onEnded };
   });
   const recorderRef = useRef<WatchProgressRecorder | null>(null);
@@ -268,6 +271,7 @@ export function EYZFlowPlayer({
       offerId,
       store: () => progressStoreRef.current,
       startTime: startTimeRef.current,
+      completedRatio: () => completedRatioRef.current,
     });
     recorderRef.current = recorder;
     recorder.start();

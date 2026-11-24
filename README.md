@@ -211,7 +211,8 @@ authorization and the storefront it saves to the EYZFlow watch history itself, w
 
 It sends `PUT /v1/content/storefront/{storefrontId}/watch-history` at most every 10 s while the film plays, at once on
 a pause or a seek, when the page is hidden and when playback stops or the page closes, and with `completed: true` at
-the end. From the last 5 % on, the film counts as watched. While casting, the TV's position is saved. Ads save
+the end. From 95 % on the film counts as watched; the player config's `watchProgress.completedPercent` (50–100)
+changes that, and 100 means only the end itself. While casting, the TV's position is saved. Ads save
 nothing, and nothing is saved before playback reaches `startTime`, so a saved position is never overwritten with 0.
 A failed save is logged and never stops playback. Leave `catalogueId` out for trailers; a film the end screen picks is
 not saved.

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgress, type WatchProgressStore } from "./watch-progress";
+import { completedRatio, eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgress, type WatchProgressStore } from "./watch-progress";
 
 const CATALOGUE = "6f1e2d3c-4b5a-4968-8776-655443322110";
 
-function setup(opts: { startTime?: number; fail?: boolean; store?: WatchProgressStore | null } = {}) {
+function setup(opts: { startTime?: number; fail?: boolean; store?: WatchProgressStore | null; completedPercent?: number } = {}) {
   const saved: Array<WatchProgress & { final: boolean }> = [];
   const store: WatchProgressStore = {
     save: vi.fn(async (progress: WatchProgress, { final }: { final: boolean }) => {
@@ -17,6 +17,7 @@ function setup(opts: { startTime?: number; fail?: boolean; store?: WatchProgress
     offerId: "offer-1",
     store: () => (opts.store !== undefined ? opts.store : store),
     startTime: opts.startTime,
+    completedRatio: () => completedRatio(opts.completedPercent),
     log,
   });
   return { recorder, saved, store, log };
@@ -99,6 +100,25 @@ describe("WatchProgressRecorder", () => {
     expect(saved.map((s) => s.completed)).toEqual([false, true]);
   });
 
+  it("takes the share that counts as watched from the config", async () => {
+    const { recorder, saved } = setup({ completedPercent: 90 });
+    recorder.report(5300, 6000);
+    recorder.checkpoint(5450);
+    await recorder.idle();
+    expect(saved.map((s) => s.completed)).toEqual([false, true]);
+  });
+
+  it("with 100 %, counts only the end itself as watched", async () => {
+    const { recorder, saved } = setup({ completedPercent: 100 });
+    recorder.report(5990, 6000);
+    recorder.finish();
+    await recorder.idle();
+    expect(saved.map((s) => [s.progressSeconds, s.completed])).toEqual([
+      [5990, false],
+      [6000, true],
+    ]);
+  });
+
   it("sends the last position as final when it stops", async () => {
     const { recorder, saved } = setup();
     recorder.report(100, 6000);
@@ -158,6 +178,16 @@ describe("WatchProgressRecorder", () => {
     recorder.report(10, 6000);
     await recorder.idle();
     expect(store.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("completedRatio", () => {
+  it("is 95 % without a config, and keeps the config's value within 50–100 %", () => {
+    expect(completedRatio(undefined)).toBe(0.95);
+    expect(completedRatio("90")).toBe(0.95);
+    expect(completedRatio(90)).toBe(0.9);
+    expect(completedRatio(20)).toBe(0.5);
+    expect(completedRatio(120)).toBe(1);
   });
 });
 

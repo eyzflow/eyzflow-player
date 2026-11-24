@@ -7,6 +7,7 @@ export type {
   PlayerCastConfig,
   PlayerAdsConfig,
   PlayerDrmConfig,
+  PlayerWatchProgressConfig,
 } from "./lib/config-types";
 export type { PlayerSeekConfig } from "./lib/seek-steps";
 export type { PlaybackLimitCode, PlaybackLimitError } from "./lib/playback-session";

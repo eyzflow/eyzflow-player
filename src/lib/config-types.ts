@@ -46,6 +46,12 @@ export type PlayerAdsConfig = {
   countdownSeconds?: number;
 };
 
+/** Watch progress ("Continue watching"). Every field is optional; the players fill in the defaults. */
+export type PlayerWatchProgressConfig = {
+  /** From this share of the film on (in percent, 50–100), it counts as watched. Missing: 95. */
+  completedPercent?: number;
+};
+
 export type PlayerDrmConfig = {
   parameters?: Record<string, unknown>;
 };
@@ -67,6 +73,8 @@ export type PlayerConfig = {
   maxBitrate?: number;
   /** How far ← / → and the back and forward buttons jump. Missing: 5 s and 10 s. */
   seek?: PlayerSeekConfig;
+  /** When a film counts as watched. Missing: from 95 %. */
+  watchProgress?: PlayerWatchProgressConfig;
 };
 
 export const DEFAULT_THEME: PlayerTheme = {
