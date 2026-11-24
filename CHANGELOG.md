@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Error messages (EYF-472): the error screen and `onError` name EYZFlow Player and the error code
+  (`EYZFlow Player error 1001`) instead of passing on Shaka's own text (`Playback error 1001: Shaka Error 1001`). If
+  the player library can't load, viewers see `EYZFlow Player couldn't start.` Analytics still record the full error.
+
 ## 0.8.3
 
 - Safari resume (EYF-464): a FairPlay film with a saved position opens there (`master.m3u8#t=<s>`) instead of
