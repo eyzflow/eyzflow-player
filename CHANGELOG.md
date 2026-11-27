@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1
+
+- Forced subtitles (EYF-520): forced tracks (DASH role `forced-subtitle`, HLS `FORCED=YES`: only the lines in another
+  language than the audio) are no longer listed in the subtitle menu, and they play whenever full subtitles are off.
+  Off now selects the forced track in the audio's language instead of nothing, and it follows an audio switch. Before,
+  the menu showed the forced track as the active subtitle and Off took its lines away. The same holds while casting.
+
 ## 0.10.0
 
 - Watch progress (EYF-493): with `catalogueId`, the player saves where the viewer is for "Continue watching". With

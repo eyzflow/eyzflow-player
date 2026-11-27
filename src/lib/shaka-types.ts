@@ -22,6 +22,8 @@ export type ShakaTextTrack = {
   label: string | null;
   kind: string | null;
   mimeType: string | null;
+  /** A forced track (HLS `FORCED=YES`, DASH role `forced-subtitle`): only the lines in another language than the audio. */
+  forced?: boolean;
 };
 
 /** An audio track (shaka.extern.AudioTrack), the part the player reads. */
