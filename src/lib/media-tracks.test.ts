@@ -5,6 +5,10 @@ import {
   castHandback,
   castTextTracks,
   castTrackForLanguage,
+  castForcedTrackFor,
+  castSubtitlesOn,
+  forcedTextTrackFor,
+  withSubtitlesOff,
   matchingTrack,
   shakaAudioTrackFor,
   withActiveTrack,
@@ -138,5 +142,48 @@ describe("matchingTrack", () => {
     const { tracks } = castTextTracks(castTracks, []);
     const handback = castHandback(castTracks, [4]);
     expect(matchingTrack(tracks, handback!.text!)?.id).toBe(4);
+  });
+});
+
+describe("forced subtitles", () => {
+  const tv: CastTrack[] = [
+    { trackId: 1, type: "AUDIO", language: "de" },
+    { trackId: 2, type: "AUDIO", language: "en" },
+    { trackId: 3, type: "TEXT", language: "de" },
+    { trackId: 5, type: "TEXT", language: "de", roles: ["forced-subtitle"] },
+    { trackId: 6, type: "TEXT", language: "en", roles: ["forced-subtitle"] },
+  ];
+
+  it("leaves the TV's forced tracks out of the menu, and one playing reads as off", () => {
+    const text = castTextTracks(tv, [1, 5]);
+    expect(text.tracks.map((t) => t.id)).toEqual([3]);
+    expect(text.active).toBeNull();
+    expect(castSubtitlesOn(tv, [1, 5])).toBe(false);
+    expect(castSubtitlesOn(tv, [1, 3])).toBe(true);
+  });
+
+  it("plays the forced track of the TV's audio when subtitles go off", () => {
+    expect(castForcedTrackFor(tv, [2])).toBe(6);
+    expect(withSubtitlesOff(tv, [1, 3])).toEqual([1, 5]);
+    expect(withSubtitlesOff(tv, [2, 5])).toEqual([2, 6]);
+  });
+
+  it("never picks a forced track for a language", () => {
+    expect(castTrackForLanguage(tv, "TEXT", "en")).toBeNull();
+    expect(castTrackForLanguage(tv, "TEXT", "de")?.trackId).toBe(3);
+  });
+
+  it("hands back off when only a forced track plays", () => {
+    expect(castHandback(tv, [1, 5])?.text).toBeNull();
+  });
+
+  it("finds the browser's forced track for the audio language", () => {
+    const tracks = [
+      { id: 1, active: false, type: "text", language: "de", label: null, kind: null, mimeType: null },
+      { id: 2, active: false, type: "text", language: "de", label: null, kind: null, mimeType: null, forced: true },
+    ];
+    expect(forcedTextTrackFor(tracks, "de-DE")?.id).toBe(2);
+    expect(forcedTextTrackFor(tracks, "en")).toBeNull();
+    expect(forcedTextTrackFor(tracks, null)).toBeNull();
   });
 });

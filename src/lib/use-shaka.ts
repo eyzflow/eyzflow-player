@@ -14,7 +14,7 @@ import {
 } from "./playback-session";
 import { SHAKA_AD_EVENTS, type ShakaAd, type ShakaAdManager, type ShakaError, type ShakaPlayerApi, type ShakaThumbnail, type ShakaTrack, type ShakaTextTrack } from "./shaka-types";
 import { audioPreference, bitrateRestrictions, matchesLanguage } from "./playback-preferences";
-import { audioOptionsFrom, shakaAudioTrackFor, type AudioOption } from "./media-tracks";
+import { audioOptionsFrom, shakaAudioTrackFor, type AudioOption, forcedTextTrackFor } from "./media-tracks";
 import { buildAccessToken } from "./drm";
 import { loadIma } from "./ima-loader";
 import { AdBreakSchedule } from "./ad-breaks";
@@ -316,7 +316,8 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     const vt = p.getVariantTracks();
     setTracks(vt);
     setActiveTrack(vt.find((t) => t.active) ?? null);
-    const tt = p.getTextTracks();
+    // Forced tracks are not offered: one playing means subtitles are off.
+    const tt = p.getTextTracks().filter((t) => !t.forced);
     setTextTracks(tt);
     // In Shaka 5 there is no separate visibility flag on Player: text is
     // visible exactly when a track is selected (active).
@@ -796,7 +797,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
         setLoadedStreamId(streamId);
         const subtitleLanguage = prefs.preferredSubtitleLanguage;
         if (subtitleLanguage) {
-          const track = player.getTextTracks().find((t) => matchesLanguage(t.language, subtitleLanguage));
+          const track = player.getTextTracks().find((t) => !t.forced && matchesLanguage(t.language, subtitleLanguage));
           if (track) {
             player.selectTextTrack(track);
             setTimeout(bindCueTrack, 0);
@@ -923,21 +924,28 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     // processes the switch; bind on the next tick (addtrack covers the rest).
     setTimeout(bindCueTrack, 0);
   }, [bindCueTrack]);
+  // Off turns full subtitles off; the forced track in the audio's language (a sign, a scene in another language)
+  // still plays, as Shaka picks it when the film starts.
   const disableCaptions = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    p.selectTextTrack(null);
+    const audioLanguage = p.getAudioTracks?.().find((t) => t.active)?.language;
+    const forced = forcedTextTrackFor(p.getTextTracks(), audioLanguage);
+    p.selectTextTrack(forced);
     setCaptionsVisible(false);
     setActiveTextTrack(null);
-    unbindCueTrack();
-  }, [unbindCueTrack]);
+    if (forced) setTimeout(bindCueTrack, 0);
+    else unbindCueTrack();
+  }, [bindCueTrack, unbindCueTrack]);
   const selectAudio = useCallback((option: AudioOption) => {
     const p = playerRef.current;
     const track = p?.getAudioTracks && shakaAudioTrackFor(p.getAudioTracks(), option);
     if (!p?.selectAudioTrack || !track) return;
     p.selectAudioTrack(track);
     setActiveAudio(option);
-  }, []);
+    // Shaka moves a forced track to the new language; show its cues.
+    setTimeout(bindCueTrack, 0);
+  }, [bindCueTrack]);
   const castAccessToken = useCallback(() => accessTokenRef.current?.() ?? null, []);
   const getThumbnail = useCallback(async (time: number) => {
     const p = playerRef.current;
@@ -956,7 +964,7 @@ export function useShaka(options: UseShakaOptions): UseShakaReturn {
     }
     const p = playerRef.current;
     if (!p) return;
-    const track = activeTextTrack ?? p.getTextTracks()[0];
+    const track = activeTextTrack ?? p.getTextTracks().find((t) => !t.forced);
     if (track) selectTextTrack(track);
   }, [captionsVisible, activeTextTrack, selectTextTrack, disableCaptions]);
 

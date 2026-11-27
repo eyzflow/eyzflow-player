@@ -10,16 +10,7 @@ import {
   type RemotePlayer,
   type RemotePlayerController,
 } from "./cast-sender";
-import {
-  castAudioOptions,
-  castHandback,
-  castTextTracks,
-  castTrackForLanguage,
-  withActiveTrack,
-  type AudioOption,
-  type CastHandback,
-  type CastTrack,
-} from "./media-tracks";
+import { castAudioOptions, castHandback, castTextTracks, castTrackForLanguage, withActiveTrack, type AudioOption, type CastHandback, type CastTrack, withSubtitlesOff, castSubtitlesOn } from "./media-tracks";
 import type { ShakaTextTrack } from "./shaka-types";
 import { seekTarget } from "./seek-steps";
 
@@ -161,8 +152,9 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
       carryRef.current = null;
       const text = castTrackForLanguage(t, "TEXT", carry.text);
       const audio = castTrackForLanguage(t, "AUDIO", carry.audio, carry.audioLabel);
-      let next = withActiveTrack(t, ids, "TEXT", text?.trackId ?? null);
-      if (audio) next = withActiveTrack(t, next, "AUDIO", audio.trackId);
+      let next = audio ? withActiveTrack(t, ids, "AUDIO", audio.trackId) : ids;
+      // Subtitles off (or a language the TV lacks): the forced track in the audio's language plays.
+      next = text ? withActiveTrack(t, next, "TEXT", text.trackId) : withSubtitlesOff(t, next);
       if (next.join() !== ids.join()) {
         ids = next;
         editTracks(next);
@@ -386,10 +378,12 @@ export function useCast({ enabled, config, streamId, ready, start, onStart, onEn
     editTracks(withActiveTrack(tracks, activeIds, "TEXT", track.id));
   }, [tracks, activeIds, editTracks]);
   const disableCaptions = useCallback(() => {
-    editTracks(withActiveTrack(tracks, activeIds, "TEXT", null));
+    editTracks(withSubtitlesOff(tracks, activeIds));
   }, [tracks, activeIds, editTracks]);
   const selectAudio = useCallback((option: AudioOption) => {
-    editTracks(withActiveTrack(tracks, activeIds, "AUDIO", Number(option.id)));
+    const next = withActiveTrack(tracks, activeIds, "AUDIO", Number(option.id));
+    // With subtitles off, the forced track follows the new language.
+    editTracks(castSubtitlesOn(tracks, next) ? next : withSubtitlesOff(tracks, next));
   }, [tracks, activeIds, editTracks]);
 
   const text = castTextTracks(tracks, activeIds);

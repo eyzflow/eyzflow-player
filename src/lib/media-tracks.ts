@@ -41,14 +41,24 @@ export type CastTrack = {
   language?: string | null;
   name?: string | null;
   subtype?: string | null;
+  /** The manifest's roles; a forced subtitle track has `forced-subtitle`. */
+  roles?: string[] | null;
 };
 
 const isText = (t: CastTrack) => t.type === "TEXT";
+const FORCED_ROLES = new Set(["forced-subtitle", "forced_subtitle", "forced"]);
+/** A forced subtitle track on the TV: never offered, it plays while subtitles are off. */
+export const isForcedCastTrack = (t: CastTrack) => isText(t) && (t.roles ?? []).some((r) => FORCED_ROLES.has(r));
+/** A subtitle track the menu offers: any but a forced one. */
+const isOfferedText = (t: CastTrack) => isText(t) && !isForcedCastTrack(t);
 const isAudio = (t: CastTrack) => t.type === "AUDIO";
 
-/** The TV's subtitle tracks in the shape the settings menu shows, and the one on (null when subtitles are off). */
+/**
+ * The TV's subtitle tracks in the shape the settings menu shows, and the one on (null when subtitles are off). Forced
+ * tracks are left out: one playing means subtitles are off.
+ */
 export function castTextTracks(tracks: CastTrack[], activeIds: number[]): { tracks: ShakaTextTrack[]; active: ShakaTextTrack | null } {
-  const text = tracks.filter(isText).map((t) => ({
+  const text = tracks.filter(isOfferedText).map((t) => ({
     id: t.trackId,
     active: activeIds.includes(t.trackId),
     type: "text",
@@ -79,6 +89,29 @@ export function withActiveTrack(tracks: CastTrack[], activeIds: number[], type: 
   return trackId === null ? kept : [...kept, trackId];
 }
 
+/** The TV's forced subtitle track in the language of the audio among `activeIds`, or null. */
+export function castForcedTrackFor(tracks: CastTrack[], activeIds: number[]): number | null {
+  const audio = tracks.find((t) => isAudio(t) && activeIds.includes(t.trackId));
+  if (!audio?.language) return null;
+  return tracks.find((t) => isForcedCastTrack(t) && matchesLanguage(t.language, audio.language!))?.trackId ?? null;
+}
+
+/** The active ids with full subtitles off: the forced track in the audio's language plays, if the TV has one. */
+export function withSubtitlesOff(tracks: CastTrack[], activeIds: number[]): number[] {
+  return withActiveTrack(tracks, activeIds, "TEXT", castForcedTrackFor(tracks, activeIds));
+}
+
+/** Whether full subtitles are on among `activeIds` (a forced track alone is off). */
+export function castSubtitlesOn(tracks: CastTrack[], activeIds: number[]): boolean {
+  return tracks.some((t) => isOfferedText(t) && activeIds.includes(t.trackId));
+}
+
+/** The browser's forced subtitle track for audio in `audioLanguage`, or null. */
+export function forcedTextTrackFor(textTracks: ShakaTextTrack[], audioLanguage: string | null | undefined): ShakaTextTrack | null {
+  if (!audioLanguage) return null;
+  return textTracks.find((t) => t.forced && matchesLanguage(t.language, audioLanguage)) ?? null;
+}
+
 /**
  * The TV's track of a kind in a language, for carrying the browser's choice over: the one with the same label first
  * (a film can have stereo and 5.1 in one language), else the first in the language.
@@ -90,7 +123,9 @@ export function castTrackForLanguage(
   label?: string | null,
 ): CastTrack | null {
   if (!language) return null;
-  const inLanguage = tracks.filter((t) => t.type === type && matchesLanguage(t.language, language));
+  const inLanguage = tracks.filter(
+    (t) => t.type === type && !isForcedCastTrack(t) && matchesLanguage(t.language, language),
+  );
   return (label && inLanguage.find((t) => t.name === label)) || inLanguage[0] || null;
 }
 
@@ -111,7 +146,7 @@ export function castHandback(tracks: CastTrack[], activeIds: number[]): CastHand
   if (!tracks.some((t) => isText(t) || isAudio(t))) return null;
   const choice = (t: CastTrack | undefined): TrackChoice | null =>
     t?.language ? { language: t.language, label: t.name || null } : null;
-  const text = tracks.find((t) => isText(t) && activeIds.includes(t.trackId));
+  const text = tracks.find((t) => isOfferedText(t) && activeIds.includes(t.trackId));
   if (text && !text.language) return null;
   return { text: choice(text), audio: choice(tracks.find((t) => isAudio(t) && activeIds.includes(t.trackId))) };
 }
