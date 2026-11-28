@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.2
+
+- Recap (EYF-531): slides change with a transition. The next picture wipes in from the side it comes from (the right
+  going forward, the left going back) with a soft light running across it, while the slide before drifts away and
+  fades; its text clears first, then the new count, title and text rise in one after another. Each picture zooms in
+  slowly while it shows, towards a different corner from slide to slide, and stops while the slideshow is paused.
+  With reduced motion only a short fade remains.
+
 ## 0.11.1
 
 - Recap (EYF-531): a recap shows at most 12 slides. Recaps now carry about one slide per 3.5 minutes of film (up to

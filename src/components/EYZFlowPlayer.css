@@ -1233,41 +1233,159 @@
   color: color-mix(in srgb, var(--eyz-text) 75%, transparent);
 }
 
+/* Slides are layers in the stage: while one comes in, the one before stays under it and leaves. */
 .eyz-recap__stage {
+  --eyz-recap-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
   flex: 1;
   min-height: 0;
+}
+
+.eyz-recap__layer {
+  position: absolute;
+  inset: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   align-items: center;
   gap: 28px;
-  animation: eyz-recap-slide 0.3s ease-out both;
 }
 
-@keyframes eyz-recap-slide {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: none; }
+.eyz-recap__layer--entering {
+  z-index: 1;
+}
+
+/* The slide before drifts away from where the next one comes from, and fades. */
+.eyz-recap__layer--leaving {
+  z-index: 0;
+  pointer-events: none;
+  animation: eyz-recap-leave 0.6s ease-in both;
+}
+
+.eyz-recap__stage--prev .eyz-recap__layer--leaving {
+  animation-name: eyz-recap-leave-back;
+}
+
+@keyframes eyz-recap-leave {
+  to { opacity: 0; transform: translateX(-28px) scale(0.97); }
+}
+
+@keyframes eyz-recap-leave-back {
+  to { opacity: 0; transform: translateX(28px) scale(0.97); }
 }
 
 .eyz-recap__figure {
   margin: 0;
   min-width: 0;
-  height: 100%;
   min-height: 0;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* The picture sizes to this box: as large as fits, never stretched. */
+  container-type: size;
 }
 
+.eyz-recap__frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  line-height: 0;
+  border-radius: calc(var(--eyz-border-radius, 10px) * 0.8);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* The next picture wipes in from the side it comes from, settling as it opens. */
+.eyz-recap__layer--entering .eyz-recap__frame {
+  animation: eyz-recap-wipe 0.85s var(--eyz-recap-ease) both;
+}
+
+.eyz-recap__stage--prev .eyz-recap__layer--entering .eyz-recap__frame {
+  animation-name: eyz-recap-wipe-back;
+}
+
+@keyframes eyz-recap-wipe {
+  from { clip-path: inset(0 0 0 100%); transform: translateX(36px); }
+  to { clip-path: inset(0); transform: none; }
+}
+
+@keyframes eyz-recap-wipe-back {
+  from { clip-path: inset(0 100% 0 0); transform: translateX(-36px); }
+  to { clip-path: inset(0); transform: none; }
+}
+
+/* A soft light runs across the picture as it opens. */
+.eyz-recap__frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+  transform: translateX(-110%);
+}
+
+.eyz-recap__layer--entering .eyz-recap__frame::after {
+  animation: eyz-recap-sheen 1.1s ease-out 0.15s both;
+}
+
+.eyz-recap__stage--prev .eyz-recap__layer--entering .eyz-recap__frame::after {
+  animation-name: eyz-recap-sheen-back;
+}
+
+@keyframes eyz-recap-sheen {
+  from { transform: translateX(110%); }
+  to { transform: translateX(-110%); }
+}
+
+@keyframes eyz-recap-sheen-back {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(110%); }
+}
+
+/* While a slide shows, its picture zooms in slowly, towards a corner that changes from slide to slide. */
 .eyz-recap__image {
   display: block;
-  max-width: min(100%, 960px);
-  max-height: 100%;
+  max-width: min(100cqw, 1280px);
+  max-height: 100cqh;
   width: auto;
   height: auto;
-  object-fit: contain;
-  border-radius: calc(var(--eyz-border-radius, 10px) * 0.8);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  background: rgba(255, 255, 255, 0.04);
+  animation: eyz-recap-zoom calc(var(--eyz-recap-seconds, 7s) + 1s) linear both;
+  animation-play-state: var(--eyz-recap-play, running);
+  transform-origin: 30% 40%;
+}
+
+.eyz-recap__layer[data-pan="1"] .eyz-recap__image { transform-origin: 70% 35%; }
+.eyz-recap__layer[data-pan="2"] .eyz-recap__image { transform-origin: 65% 70%; }
+.eyz-recap__layer[data-pan="3"] .eyz-recap__image { transform-origin: 35% 65%; }
+
+@keyframes eyz-recap-zoom {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.09); }
+}
+
+/* The text follows the picture: count, title, then body. */
+.eyz-recap__layer--entering .eyz-recap__count,
+.eyz-recap__layer--entering .eyz-recap__slide-title,
+.eyz-recap__layer--entering .eyz-recap__body {
+  animation: eyz-recap-rise 0.55s var(--eyz-recap-ease) both;
+}
+
+.eyz-recap__layer--entering .eyz-recap__count { animation-delay: 0.26s; }
+.eyz-recap__layer--entering .eyz-recap__slide-title { animation-delay: 0.34s; }
+.eyz-recap__layer--entering .eyz-recap__body { animation-delay: 0.44s; }
+
+/* The text before clears first, so two titles never sit on top of each other. */
+.eyz-recap__layer--leaving .eyz-recap__text {
+  animation: eyz-recap-text-out 0.24s ease-in both;
+}
+
+@keyframes eyz-recap-text-out {
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+@keyframes eyz-recap-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
 }
 
 .eyz-recap__text {
@@ -1372,7 +1490,7 @@
     padding: 12px 14px 12px;
   }
 
-  .eyz-recap__stage {
+  .eyz-recap__layer {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 12px;
@@ -1400,8 +1518,26 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .eyz-recap,
-  .eyz-recap__stage {
+  .eyz-recap {
+    animation: none;
+  }
+
+  /* Only a short fade from slide to slide: no wipe, light, drift or zoom. */
+  .eyz-recap__layer--leaving {
+    display: none;
+  }
+
+  .eyz-recap__layer--entering {
+    animation: eyz-recap-in 0.2s ease-out both;
+  }
+
+  .eyz-recap__layer--entering .eyz-recap__frame,
+  .eyz-recap__layer--entering .eyz-recap__frame::after,
+  .eyz-recap__layer--entering .eyz-recap__count,
+  .eyz-recap__layer--entering .eyz-recap__slide-title,
+  .eyz-recap__layer--entering .eyz-recap__body,
+  .eyz-recap__layer--leaving .eyz-recap__text,
+  .eyz-recap__image {
     animation: none;
   }
 
