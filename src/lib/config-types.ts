@@ -32,6 +32,8 @@ export type PlayerFeatures = {
   thumbnails?: boolean;
   /** Back and forward buttons beside play in the middle of the player, as on iOS. Missing (older configs): on. */
   seekButtons?: boolean;
+  /** The Recap button (the story so far as slides), on streams that have a recap. Missing (older configs): on. */
+  recap?: boolean;
 };
 
 export type PlayerCastConfig = {
@@ -102,6 +104,7 @@ export const DEFAULT_FEATURES: PlayerFeatures = {
   endScreen: true,
   thumbnails: true,
   seekButtons: true,
+  recap: true,
 };
 
 export const DEFAULT_CONFIG: PlayerConfig = {

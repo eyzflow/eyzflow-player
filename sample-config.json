@@ -22,7 +22,8 @@
     "ads": false,
     "autoHideControls": true,
     "thumbnails": true,
-    "seekButtons": true
+    "seekButtons": true,
+    "recap": true
   },
   "cast": {
     "receiverAppId": "",

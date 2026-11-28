@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0
+
+- Recap (EYF-531): a Recap button in the control bar plays the story so far as a slideshow (still, title and a few
+  lines per slide) over the paused film, from the stream's `recaps/index.json` on the stream CDN in the viewer's
+  language. It shows only once the viewer is past the first slide's moment, and only the slides up to where they
+  are. ← / → step, Space pauses, Esc or "Continue watching" goes back and plays on. New props `recap`
+  (`true` by default, a VTT URL, or `false`), `onRecapOpen` and `onRecapClose`; `features.recap: false` in the
+  config turns it off. A stream without a recap is unchanged and logs nothing. The VTT is never added to the video,
+  so subtitles are untouched.
+
 ## 0.10.1
 
 - Forced subtitles (EYF-520): forced tracks (DASH role `forced-subtitle`, HLS `FORCED=YES`: only the lines in another

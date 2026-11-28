@@ -23,3 +23,5 @@ export type {
 } from "./lib/end-screen";
 export { eyzflowWatchHistoryStore } from "./lib/watch-progress";
 export type { EYZFlowWatchHistoryTarget, WatchProgress, WatchProgressStore } from "./lib/watch-progress";
+export { loadRecap, parseRecapVtt } from "./lib/recap";
+export type { Recap, RecapDocument, RecapIndex, RecapIndexEntry, RecapSlide } from "./lib/recap";

@@ -26,6 +26,9 @@ export function PlayerPage() {
   const catalogueId = params.get("catalogueId") ?? undefined;
   const startTime = params.has("startTime") ? Number(params.get("startTime")) : undefined;
   const progressLog = params.get("progressLog") === "1" ? loggingProgressStore : undefined;
+  // Recap: `recap=0` turns it off, `recap=<url>` reads that recap VTT instead of the stream's own.
+  const recapParam = params.get("recap");
+  const recap = recapParam === null ? undefined : recapParam === "0" || recapParam === "false" ? false : recapParam;
   const config: Partial<PlayerConfig> | undefined =
     adTag || castAppId
       ? {
@@ -70,6 +73,9 @@ export function PlayerPage() {
         catalogueId={catalogueId}
         watchProgressStore={progressLog}
         startTime={startTime}
+        recap={recap}
+        onRecapOpen={(r) => console.info("[demo] recap opened", JSON.stringify(r))}
+        onRecapClose={() => console.info("[demo] recap closed")}
         renderOverlay={overlayDemo ? similarFilms : undefined}
         endScreen={endScreenDemo ? demoEndScreen(streamId) : undefined}
         fill

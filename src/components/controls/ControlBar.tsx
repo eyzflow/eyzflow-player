@@ -11,6 +11,7 @@ import { CastButton } from "./CastButton";
 import { AirPlayButton } from "./AirPlayButton";
 import { PipButton } from "./PipButton";
 import { FullscreenButton } from "./FullscreenButton";
+import { RecapButton } from "../RecapSlideshow";
 
 type Props = {
   playing: boolean;
@@ -44,6 +45,8 @@ type Props = {
   onMenuOpenChange?: (open: boolean) => void;
   /** The seek bar preview at a time; absent without a thumbnails track. */
   getThumbnail?: (time: number) => Promise<ShakaThumbnail | null>;
+  /** Opens the recap; absent while there is none to offer here. */
+  onRecap?: () => void;
 };
 
 export function ControlBar({
@@ -58,6 +61,7 @@ export function ControlBar({
   onSelectTrack, onSelectTextTrack, onCaptionsOff, onSelectAudio, onToggleCaptions,
   onMenuOpenChange,
   getThumbnail,
+  onRecap,
 }: Props) {
   return (
     <div className="eyz-controls">
@@ -69,6 +73,7 @@ export function ControlBar({
           <TimeDisplay currentTime={currentTime} duration={duration} />
         </div>
         <div className="eyz-controls-right">
+          {onRecap && <RecapButton onClick={onRecap} />}
           {features.captions && textTracks.length > 0 && (
             <CaptionsButton visible={captionsVisible} onToggle={onToggleCaptions} />
           )}
