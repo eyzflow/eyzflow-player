@@ -21,6 +21,8 @@ import { defaultThumbnailsUrl } from "../lib/playback-preferences";
 import { seekSteps as resolveSeekSteps, type PlayerSeekConfig } from "../lib/seek-steps";
 import { SeekButtons, SeekIcon } from "./controls/SeekButtons";
 import { completedRatio, eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgressStore } from "../lib/watch-progress";
+import { loadRecap, recapAvailableFrom, recapLanguages, slidesUpTo, type Recap } from "../lib/recap";
+import { RecapSlideshow } from "./RecapSlideshow";
 
 function mergeConfig(
   base: PlayerConfig,
@@ -142,6 +144,16 @@ export type EYZFlowPlayerProps = {
    * 10) jump, in whole seconds. Overrides the config's `seek`.
    */
   seekSteps?: PlayerSeekConfig;
+  /**
+   * Recap: the story so far as a slideshow, from the stream's `recaps/index.json` on the stream CDN. `true` (default)
+   * looks for the stream's own recap in the viewer's language, a string is the URL of a recap VTT, `false` turns it
+   * off. The config's `features.recap: false` turns it off too. A stream without a recap shows no button.
+   */
+  recap?: boolean | string;
+  /** The viewer opened the recap (the film pauses). `slides` is how many show: those up to the viewer's position. */
+  onRecapOpen?: (recap: { language: string | null; title: string | null; slides: number }) => void;
+  /** The viewer closed the recap; the film plays on. */
+  onRecapClose?: () => void;
   /** Where `streamId` starts, in seconds, e.g. to resume. A stream the end screen picks starts at the beginning. */
   startTime?: number;
   /** About four times a second while the content plays, and after a seek. Not during an ad. */
@@ -184,6 +196,9 @@ export function EYZFlowPlayer({
   maxBitrate,
   thumbnails = true,
   seekSteps: seekStepsProp,
+  recap: recapProp = true,
+  onRecapOpen,
+  onRecapClose,
   startTime,
   onTimeUpdate,
   onPause,
@@ -465,8 +480,38 @@ export function EYZFlowPlayer({
     return () => window.removeEventListener("keydown", onKey);
   }, [endPhase, dismissMoment]);
 
+  // Recap: loaded per stream; a custom URL belongs to the app's stream, not to one the end screen picked.
+  const recapEnabled = recapProp !== false && config.features.recap !== false;
+  const recapUrl = typeof recapProp === "string" && playingStreamId === streamId ? recapProp : undefined;
+  const recapLanguagesKey = recapLanguages(preferredSubtitleLanguage, preferredAudioLanguage).join(",");
+  // Kept with what it was loaded for, so a recap never outlives its stream, URL or languages.
+  const recapKey = `${playingStreamId}|${recapUrl ?? ""}|${recapLanguagesKey}`;
+  const [recapData, setRecapData] = useState<{ key: string; recap: Recap } | null>(null);
+  useEffect(() => {
+    if (!recapEnabled) return;
+    const controller = new AbortController();
+    void loadRecap({
+      cdnOrigin: STREAM_CDN_ORIGIN,
+      streamId: playingStreamId,
+      url: recapUrl,
+      languages: recapLanguagesKey.split(","),
+      signal: controller.signal,
+    }).then((loaded) => {
+      if (!controller.signal.aborted && loaded) setRecapData({ key: recapKey, recap: loaded });
+    });
+    return () => controller.abort();
+  }, [recapEnabled, recapUrl, playingStreamId, recapLanguagesKey, recapKey]);
+  const recap = recapEnabled && recapData?.key === recapKey ? recapData.recap : null;
+  const [recapOpen, setRecapOpen] = useState<{ streamId: string; slides: Recap["slides"] } | null>(null);
+  const recapShownSlides = recap && recapOpen?.streamId === playingStreamId ? recapOpen.slides : null;
+  const recapFrom = recapAvailableFrom(recap);
+  // The button: once the viewer is past the first slide's moment, while the film is in charge.
+  const recapOffered =
+    !!recap && recapFrom !== null && currentTime >= recapFrom && state === "ready" && !adPlaying && !casting && !overlayShown && !endPhase;
+
   // The signal is the browser video's, which stands still while casting.
-  const showSkip = config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown && !endPhase && !casting;
+  const showSkip =
+    config.features.skipButtons !== false && !adPlaying && state === "ready" && !overlayShown && !endPhase && !casting && !recapShownSlides;
 
   // Auto-hide controls after 3s of pointer inactivity, but only while playing
   // and no settings menu is open.
@@ -484,7 +529,7 @@ export function EYZFlowPlayer({
 
   // Clicks and shortcuts drive the video only while the controls are in charge:
   // not during an ad, the app's overlay or the end screen.
-  const controlsActive = resolved.controls && state === "ready" && !adPlaying && !overlayShown && !endPhase;
+  const controlsActive = resolved.controls && state === "ready" && !adPlaying && !overlayShown && !endPhase && !recapShownSlides;
 
   // Centre flash after a click or shortcut (play, pause, volume, seek).
   // Seeks flash on their own side, clear of the back, play and forward buttons in the middle.
@@ -591,6 +636,31 @@ export function EYZFlowPlayer({
     resetHideTimer();
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
+
+  // The recap pauses the film and shows the slides up to here; closing it plays on.
+  const recapCallbacks = useRef({ onRecapOpen, onRecapClose });
+  useEffect(() => {
+    recapCallbacks.current = { onRecapOpen, onRecapClose };
+  });
+  const openRecap = useCallback(() => {
+    if (!recap) return;
+    const slides = slidesUpTo(recap.slides, videoRef.current?.currentTime ?? currentTime);
+    if (slides.length === 0) return;
+    pause();
+    setRecapOpen({ streamId: playingStreamId, slides });
+    recapCallbacks.current.onRecapOpen?.({ language: recap.language, title: recap.title, slides: slides.length });
+  }, [recap, videoRef, currentTime, pause, playingStreamId]);
+  const closeRecap = useCallback(() => {
+    setRecapOpen(null);
+    play();
+    recapCallbacks.current.onRecapClose?.();
+    // Focus goes back to the Recap button (or the player) for the keyboard.
+    requestAnimationFrame(() => {
+      const container = containerRef.current;
+      const button = container?.querySelector<HTMLButtonElement>(".eyz-btn--recap");
+      (button ?? container)?.focus({ preventScroll: true });
+    });
+  }, [play]);
 
   // Apply theme as CSS custom properties
   const { theme } = config;
@@ -712,7 +782,10 @@ export function EYZFlowPlayer({
         )
       )}
       <PlayerOverlay state={shaka.state} errorMsg={shaka.errorMsg} />
-      {resolved.controls && shaka.state !== "error" && !shaka.adPlaying && (
+      {recap && recapShownSlides && (
+        <RecapSlideshow key={playingStreamId} recap={recap} slides={recapShownSlides} onClose={closeRecap} />
+      )}
+      {resolved.controls && shaka.state !== "error" && !shaka.adPlaying && !recapShownSlides && (
         <ControlBar
           playing={playing}
           currentTime={currentTime}
@@ -743,6 +816,7 @@ export function EYZFlowPlayer({
           onToggleCaptions={toggleCaptions}
           onMenuOpenChange={setMenuOpen}
           getThumbnail={hasThumbnails ? getThumbnail : undefined}
+          onRecap={recapOffered ? openRecap : undefined}
         />
       )}
     </div>

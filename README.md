@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.10.1
+npm install github:eyzflow/eyzflow-player#v0.11.0
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -59,6 +59,9 @@ export function Watch() {
 | `maxBitrate` | `number` | Highest bitrate the player picks, in bits per second (video and audio together). Wins over the config's `maxBitrate`. |
 | `seekSteps` | `{ arrowKeySeconds?, buttonSeconds? }` | How far ← / → (default 5) and the back and forward buttons, `j` and `l` (default 10) jump, in whole seconds (1–600). Wins over the config's `seek`. |
 | `thumbnails` | `boolean \| string` | Seek bar thumbnails. `true` (default): the stream's own track; a string: the URL of a WebVTT sprite track; `false`: off. |
+| `recap` | `boolean \| string` | The Recap button: the story so far as slides. `true` (default): the stream's own recap, if it has one; a string: the URL of a recap VTT; `false`: off. See [Recap](#recap). |
+| `onRecapOpen` | `(recap: { language, title, slides }) => void` | The viewer opened the recap (the film pauses). `slides`: how many show. |
+| `onRecapClose` | `() => void` | The viewer closed the recap; the film plays on. |
 | `onTimeUpdate` | `(time: number, duration: number) => void` | About four times a second while the content plays, and after a seek. Not during an ad. |
 | `onPause` | `(time: number) => void` | The viewer paused (not an ad break or the end). |
 | `onSeeked` | `(time: number) => void` | A seek finished at `time`. |
@@ -172,6 +175,44 @@ Pass the films and the player does the rest: at the closing credits "Up next" sh
 - **Customize:** it takes the player config's theme. Every part has an `eyz-end-screen…` class (`__next`, `__play`, `__cancel`, `__row`, `__heading`, `__items`, `__card`, `__card-poster`, `__card-title`, `__badge`, …), `className` adds your own, `title` renames the row, and `renderItem(item, { select })` draws a card your way. For a layout of your own, use `renderOverlay`, which wins when it returns something.
 - **Remote config:** `features.endScreen: false` turns it off; `endScreen.autoplaySeconds` (0–30, 0 = no countdown, default 10), `endScreen.showAt` (`credits` or `end`), `endScreen.shrinkVideo` (shrinks the video into the top-right corner, default off) and `endScreen.secondsBeforeEnd` (0–120, default 20) tune it. The prop's values win.
 - Texts in English, German, French and Dutch. Nothing shows during an ad. Try it on the dev page with `?endScreenDemo=1`.
+
+## Recap
+
+A recap catches the viewer up on the film so far: a slideshow of stills, each with a title and a few lines, made in
+the dashboard (Stream → AI Recaps). The player finds it by itself at `{streamId}/recaps/index.json` on the stream CDN and
+shows a Recap button in the control bar.
+
+- **When:** only once the viewer is past the first slide's moment in the film (resuming, or mid-film), and then only
+  the slides about what they have already seen. At the start of a film there is no button, so nothing is spoiled.
+- **Showing it:** it pauses the film and plays the slides over it on their own clock. ← / → step, Space pauses, Esc,
+  the close button and "Continue watching" go back to the film, which plays on. The slides don't move with
+  `prefers-reduced-motion`.
+- **Language:** the browser's language when the stream has a recap in it, then `preferredSubtitleLanguage` and
+  `preferredAudioLanguage`, else the first one listed.
+- **None:** a stream without a recap (a 404, or anything that can't be read) shows no button and logs nothing.
+  `recap={false}` or the config's `features.recap: false` turn it off; `recap="https://…/recap.de.vtt"` reads that file.
+- **Format:** WebVTT whose cue times are the slideshow's clock. Line 1 of a cue is the image path relative to the VTT,
+  with `#t=<seconds>` for the film moment it is about (a slide without one goes with the slide before it); line 2 the
+  title; the rest the text. It is read on its own and never added to the video, so subtitles are not affected.
+
+  ```
+  WEBVTT
+
+  NOTE
+  eyzrecap: 1
+  language: de
+  title: Kein Sterbenswort
+
+  1
+  00:00:00.000 --> 00:00:07.000
+  images/001.jpg#t=754
+  Der Anruf
+  Acht Jahre nach dem Mord erhält Alex eine E-Mail, die nur Margot geschrieben haben kann.
+  ```
+
+- **Customize:** every part has an `eyz-recap…` class (`__progress`, `__header`, `__stage`, `__image`, `__slide-title`,
+  `__body`, `__nav`, `__continue`, …); colours come from the theme. Texts in English, German, French and Dutch. On the
+  dev page, `?recap=<url of a VTT>` tries a file and `?recap=0` turns it off.
 
 ## Overlay at the credits
 
