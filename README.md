@@ -7,7 +7,7 @@ React video player for EYZFlow streams, built on [Shaka Player](https://github.c
 The package ships its TypeScript sources, so it installs straight from GitHub:
 
 ```bash
-npm install github:eyzflow/eyzflow-player#v0.11.0
+npm install github:eyzflow/eyzflow-player#v0.11.1
 ```
 
 React 18 or later is a peer dependency. Releases are tagged; see the [CHANGELOG](CHANGELOG.md).
@@ -184,6 +184,8 @@ shows a Recap button in the control bar.
 
 - **When:** only once the viewer is past the first slide's moment in the film (resuming, or mid-film), and then only
   the slides about what they have already seen. At the start of a film there is no button, so nothing is spoiled.
+- **Length:** at most 12 slides. With more up to the viewer's position, every slide from the last 15 minutes stays and
+  the rest are the earlier slides that matter most (`&p=`, below), in film order.
 - **Showing it:** it pauses the film and plays the slides over it on their own clock. ← / → step, Space pauses, Esc,
   the close button and "Continue watching" go back to the film, which plays on. The slides don't move with
   `prefers-reduced-motion`.
@@ -192,8 +194,8 @@ shows a Recap button in the control bar.
 - **None:** a stream without a recap (a 404, or anything that can't be read) shows no button and logs nothing.
   `recap={false}` or the config's `features.recap: false` turn it off; `recap="https://…/recap.de.vtt"` reads that file.
 - **Format:** WebVTT whose cue times are the slideshow's clock. Line 1 of a cue is the image path relative to the VTT,
-  with `#t=<seconds>` for the film moment it is about (a slide without one goes with the slide before it); line 2 the
-  title; the rest the text. It is read on its own and never added to the video, so subtitles are not affected.
+  with `#t=<seconds>` for the film moment it is about (a slide without one goes with the slide before it) and optionally
+  `&p=<1-3>` for how much it matters (3 = a turning point; missing counts as 1); line 2 the title; the rest the text. It is read on its own and never added to the video, so subtitles are not affected.
 
   ```
   WEBVTT
@@ -205,7 +207,7 @@ shows a Recap button in the control bar.
 
   1
   00:00:00.000 --> 00:00:07.000
-  images/001.jpg#t=754
+  images/001.jpg#t=754&p=3
   Der Anruf
   Acht Jahre nach dem Mord erhält Alex eine E-Mail, die nur Margot geschrieben haben kann.
   ```

@@ -6,7 +6,8 @@ import { matchesLanguage } from "./playback-preferences";
  * never added to the <video> as a text track, or the player would show it as subtitles.
  *
  * A cue's times are the slideshow's own clock. Its first line is the image path relative to the VTT, optionally with
- * `#t=<seconds>`: the film moment the slide is about. The second line is the slide title, the rest its text.
+ * `#t=<seconds>`: the film moment the slide is about, and `&p=<1-3>`: how much it matters (3 = a turning point). The
+ * second line is the slide title, the rest its text.
  */
 
 /** One entry of `recaps/index.json`. `url` is relative to `recaps/`. */
@@ -34,6 +35,8 @@ export type RecapSlide = {
    * so it shows together with the slide before it.
    */
   at: number;
+  /** How much the slide matters, 1–3 (3 = a turning point); null when the file gives none (older files). */
+  priority: number | null;
   title: string;
   body: string;
 };
@@ -67,16 +70,22 @@ export function parseTimestamp(value: string): number {
   return Number(h ?? 0) * 3600 + Number(min) * 60 + Number(s) + (ms ? Number(ms.padEnd(3, "0")) / 1000 : 0);
 }
 
-/** The image path and its `#t` film time (null without one). `#t=754` and `#t=754,760` both give 754. */
-export function splitImageRef(ref: string): { image: string; at: number | null } {
+/**
+ * The image path, its `#t` film time and its `&p` priority (each null without one). `#t=754` and `#t=754,760` both
+ * give 754; `p` counts only as 1, 2 or 3.
+ */
+export function splitImageRef(ref: string): { image: string; at: number | null; priority: number | null } {
   const hash = ref.indexOf("#");
-  if (hash < 0) return { image: ref, at: null };
+  if (hash < 0) return { image: ref, at: null, priority: null };
   const image = ref.slice(0, hash);
-  const t = /(?:^|&)t=(?:npt:)?([^,&]+)/.exec(ref.slice(hash + 1));
-  if (!t) return { image, at: null };
+  const fragment = ref.slice(hash + 1);
+  const p = /(?:^|&)p=([1-3])(?:&|$)/.exec(fragment);
+  const priority = p ? Number(p[1]) : null;
+  const t = /(?:^|&)t=(?:npt:)?([^,&]+)/.exec(fragment);
+  if (!t) return { image, at: null, priority };
   const raw = t[1];
   const at = raw.includes(":") ? parseTimestamp(raw) : Number(raw);
-  return { image, at: Number.isFinite(at) && at >= 0 ? at : null };
+  return { image, at: Number.isFinite(at) && at >= 0 ? at : null, priority };
 }
 
 /**
@@ -119,7 +128,7 @@ export function parseRecapVtt(text: string): RecapDocument {
 
     const payload = lines.slice(timing + 1).map((line) => line.trim());
     if (!payload[0]) continue;
-    const { image, at } = splitImageRef(payload[0]);
+    const { image, at, priority } = splitImageRef(payload[0]);
     if (!image) continue;
     if (at !== null) lastAt = at;
     doc.slides.push({
@@ -127,6 +136,7 @@ export function parseRecapVtt(text: string): RecapDocument {
       end,
       image,
       at: at ?? lastAt,
+      priority,
       title: payload[1] ?? "",
       body: payload.slice(2).filter(Boolean).join("\n"),
     });
@@ -164,6 +174,35 @@ export function recapAvailableFrom(recap: Pick<Recap, "slides"> | null): number 
 /** The slides the viewer has already seen the moment of: `at` at or before `position`. No spoilers. */
 export function slidesUpTo<T extends Pick<RecapSlide, "at">>(slides: T[], position: number): T[] {
   return slides.filter((slide) => slide.at <= position + 0.5);
+}
+
+/** The most slides a recap shows at once; a longer one is condensed (`condenseRecapSlides`). */
+export const RECAP_MAX_SHOWN = 12;
+/** Every slide from this many seconds before the position stays when a recap is condensed. */
+export const RECAP_RECENT_SECONDS = 15 * 60;
+
+/**
+ * The slides to show at `position`: those up to it (`slidesUpTo`), and when there are more than `max`, `max` of them.
+ * Every slide from the last 15 minutes stays (only the latest `max` if even those are more); the rest of the room goes
+ * to the earlier slides that matter most (`priority`, missing counts as 1), the later one winning a tie. They show in
+ * the recap's own (film) order.
+ */
+export function condenseRecapSlides<T extends Pick<RecapSlide, "at" | "priority">>(
+  slides: T[],
+  position: number,
+  max = RECAP_MAX_SHOWN,
+  recentSeconds = RECAP_RECENT_SECONDS,
+): T[] {
+  const shown = slidesUpTo(slides, position);
+  if (shown.length <= max) return shown;
+  const indexed = shown.map((slide, index) => ({ slide, index }));
+  const recent = indexed.filter(({ slide }) => slide.at >= position - recentSeconds);
+  if (recent.length >= max) return recent.slice(-max).map(({ slide }) => slide);
+  const earlier = indexed
+    .filter(({ slide }) => slide.at < position - recentSeconds)
+    .sort((a, b) => (b.slide.priority ?? 1) - (a.slide.priority ?? 1) || b.slide.at - a.slide.at || b.index - a.index)
+    .slice(0, max - recent.length);
+  return [...earlier, ...recent].sort((a, b) => a.index - b.index).map(({ slide }) => slide);
 }
 
 async function fetchText(url: string, signal?: AbortSignal): Promise<string | null> {
