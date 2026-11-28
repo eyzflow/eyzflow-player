@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../fixtures/recap/r1/recap.de.1.vtt?raw";
 import fixtureIndex from "../../fixtures/recap/index.json";
+// The VTTs of the backend's sample package (shared/utils/recap-package/__fixtures__/sample.eyzrecap), as it writes them.
+import backendDe from "../../fixtures/recap/backend-sample/recap.de.vtt?raw";
+import backendEn from "../../fixtures/recap/backend-sample/recap.en.vtt?raw";
 import {
   loadRecap,
   parseRecapVtt,
@@ -58,6 +61,21 @@ describe("parseRecapVtt", () => {
     expect(doc.slides).toEqual([]);
     expect(parseRecapVtt("<html>Not found</html>").slides).toEqual([]);
     expect(parseRecapVtt("").slides).toEqual([]);
+  });
+});
+
+describe("the backend's sample package", () => {
+  it("reads both languages as the backend's own parser does", () => {
+    const en = parseRecapVtt(backendEn);
+    expect(en.language).toBe("en");
+    expect(en.title).toBe("Sample");
+    expect(en.slides).toEqual([
+      { start: 0, end: 5, image: "images/001.png", at: 754, title: "The call", body: "An email changes everything." },
+      { start: 5, end: 10, image: "images/002.png", at: 1312, title: "On the run", body: "The police are after him." },
+    ]);
+    const de = parseRecapVtt(backendDe);
+    expect(de.language).toBe("de");
+    expect(de.slides.map((s) => [s.image, s.at])).toEqual(en.slides.map((s) => [s.image, s.at]));
   });
 });
 
