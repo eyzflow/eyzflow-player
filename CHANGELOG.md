@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.1
+
+- Recap (EYF-531): a recap shows at most 12 slides. Recaps now carry about one slide per 3.5 minutes of film (up to
+  40), so past 12 slides up to the viewer's position the player keeps every slide from the last 15 minutes and fills
+  the rest with the earlier slides that matter most (`&p=1`–`3` after `#t` on the picture line, 3 = a turning point;
+  missing counts as 1; the later one wins a tie), shown in film order. Up to 12, all show as before. Files without
+  `&p=` still work.
+
 ## 0.11.0
 
 - Recap (EYF-531): a Recap button in the control bar plays the story so far as a slideshow (still, title and a few

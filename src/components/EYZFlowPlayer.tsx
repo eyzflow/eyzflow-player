@@ -21,7 +21,7 @@ import { defaultThumbnailsUrl } from "../lib/playback-preferences";
 import { seekSteps as resolveSeekSteps, type PlayerSeekConfig } from "../lib/seek-steps";
 import { SeekButtons, SeekIcon } from "./controls/SeekButtons";
 import { completedRatio, eyzflowWatchHistoryStore, WatchProgressRecorder, type WatchProgressStore } from "../lib/watch-progress";
-import { loadRecap, recapAvailableFrom, recapLanguages, slidesUpTo, type Recap } from "../lib/recap";
+import { condenseRecapSlides, loadRecap, recapAvailableFrom, recapLanguages, type Recap } from "../lib/recap";
 import { RecapSlideshow } from "./RecapSlideshow";
 
 function mergeConfig(
@@ -150,7 +150,7 @@ export type EYZFlowPlayerProps = {
    * off. The config's `features.recap: false` turns it off too. A stream without a recap shows no button.
    */
   recap?: boolean | string;
-  /** The viewer opened the recap (the film pauses). `slides` is how many show: those up to the viewer's position. */
+  /** The viewer opened the recap (the film pauses). `slides` is how many show: those up to the viewer's position, at most 12. */
   onRecapOpen?: (recap: { language: string | null; title: string | null; slides: number }) => void;
   /** The viewer closed the recap; the film plays on. */
   onRecapClose?: () => void;
@@ -644,7 +644,7 @@ export function EYZFlowPlayer({
   });
   const openRecap = useCallback(() => {
     if (!recap) return;
-    const slides = slidesUpTo(recap.slides, videoRef.current?.currentTime ?? currentTime);
+    const slides = condenseRecapSlides(recap.slides, videoRef.current?.currentTime ?? currentTime);
     if (slides.length === 0) return;
     pause();
     setRecapOpen({ streamId: playingStreamId, slides });
